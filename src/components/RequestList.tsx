@@ -121,8 +121,12 @@ export const RequestList: React.FC<RequestListProps> = ({
     };
 
     const getMockCandidateLink = (req: Request) => {
-        // req.token is the consent token from the backend
-        const token = req.candidateToken || req.token || `consent-${req.requestId}`;
+        // req.token is the consent token from the backend (ConsentToken column)
+        const token = req.token;
+        if (!token) {
+            console.error('Missing consent token for request:', req.requestId);
+            return '#';
+        }
         return `${window.location.origin}?view=portal&action=authorize&token=${token}`;
     };
 
