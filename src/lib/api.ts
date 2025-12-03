@@ -182,7 +182,8 @@ const mockGAS = {
 export const runGAS = (functionName: string, ...args: unknown[]) => {
     return new Promise((resolve, reject) => {
         const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-        const gasBaseUrl = import.meta.env.VITE_GAS_BASE_URL;
+        // Hardcoded URL to ensure Vercel uses the correct active deployment (v29+)
+        const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbxftUzpcjLn0fdNctnHISL6OkAgh5XvsmiJw90ow_vbHGwodzq6Wfjmf6mkXN910tA5/exec';
 
         if (useMocks) {
             // Local development mock
