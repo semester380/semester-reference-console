@@ -189,7 +189,16 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
         );
     };
 
-    const responses = requestData?.responses || {};
+    // Ensure responses is an object (handle JSON string from Sheets)
+    let responses = requestData?.responses || {};
+    if (typeof responses === 'string') {
+        try {
+            responses = JSON.parse(responses);
+        } catch (e) {
+            console.error('Failed to parse responses JSON:', e);
+            responses = {};
+        }
+    }
     const hasSignature = Object.values(responses).some(
         (value: unknown) => value && typeof value === 'object' && 'typedName' in value
     );
@@ -373,8 +382,8 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
                                 <div className="flex items-center gap-3">
                                     <span className="text-sm font-medium text-nano-gray-600">Sentiment:</span>
                                     <span className={`px-3 py-1 rounded-full text-xs font-semibold border shadow-sm ${requestData.aiAnalysis.sentimentScore?.includes('Positive') ? 'bg-green-50 text-green-700 border-green-200' :
-                                            requestData.aiAnalysis.sentimentScore?.includes('Negative') ? 'bg-red-50 text-red-700 border-red-200' :
-                                                'bg-gray-50 text-gray-700 border-gray-200'
+                                        requestData.aiAnalysis.sentimentScore?.includes('Negative') ? 'bg-red-50 text-red-700 border-red-200' :
+                                            'bg-gray-50 text-gray-700 border-gray-200'
                                         }`}>
                                         {requestData.aiAnalysis.sentimentScore || 'Unknown'}
                                     </span>
