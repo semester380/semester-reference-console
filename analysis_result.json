@@ -1,0 +1,5 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:04 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:05 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:06 --:--:--     0100   724    0   724    0     0    108      0 --:--:--  0:00:06 --:--:--   162100   724    0   724    0     0    108      0 --:--:--  0:00:06 --:--:--   209
+100   197    0   197    0     0     27      0 --:--:--  0:00:07 --:--:--    27
+{"success":true,"analysis":{"configured":true,"sentimentScore":"Error","summary":["Error analyzing reference: TypeError: Cannot read properties of null (reading 'getSheetByName')"],"anomalies":[]}}

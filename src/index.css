@@ -1,0 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Toast animation */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@layer base {
+  * {
+    @apply antialiased;
+  }
+
+  body {
+    @apply font-sans text-nano-gray-900 bg-nano-gray-50;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-semibold;
+  }
+}
+
+@layer components {
+
+  /* Button Styles */
+  .btn-primary {
+    @apply px-4 py-2 bg-semester-blue text-white rounded-lg font-medium hover:bg-semester-blue-dark transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-semester-blue focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-nano-gray-200 text-nano-gray-800 rounded-lg font-medium hover:bg-nano-gray-300 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-nano-gray-400 focus:ring-offset-2;
+  }
+
+  .btn-ghost {
+    @apply px-4 py-2 text-nano-gray-700 rounded-lg font-medium hover:bg-nano-gray-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-nano-gray-300 focus:ring-offset-2;
+  }
+
+  /* Card Styles */
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-nano-gray-200 p-6 transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply card hover:shadow-lg hover:-translate-y-0.5 hover:border-nano-gray-300;
+  }
+
+  .glass {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-lg;
+  }
+
+  /* Input Styles */
+  .input {
+    @apply w-full px-4 py-3 border border-nano-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-semester-blue/20 focus:border-semester-blue placeholder:text-nano-gray-400 transition-all duration-200 bg-nano-gray-50/50 hover:bg-white focus:bg-white;
+  }
+
+  /* Badge Styles */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-status-success/10 text-status-success;
+  }
+
+  .badge-warning {
+    @apply badge bg-status-warning/10 text-status-warning;
+  }
+
+  .badge-error {
+    @apply badge bg-status-error/10 text-status-error;
+  }
+
+  .badge-info {
+    @apply badge bg-status-info/10 text-status-info;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

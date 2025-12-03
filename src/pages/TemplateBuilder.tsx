@@ -1,0 +1,340 @@
+import React, { useState, useEffect } from 'react';
+import { Card, Button, Input } from '../components/UI';
+import { DynamicForm } from '../components/DynamicForm';
+import { runGAS } from '../lib/api';
+import type { TemplateField, Template } from '../types';
+
+const TemplateBuilder: React.FC = () => {
+    const [templateName, setTemplateName] = useState('New Reference Template');
+    const [fields, setFields] = useState<TemplateField[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [activeTab, setActiveTab] = useState<'builder' | 'preview'>('builder');
+    const [previewMode, setPreviewMode] = useState<'mobile' | 'desktop'>('mobile');
+
+    // Load default template on mount
+    useEffect(() => {
+        loadDefaultTemplate();
+    }, []);
+
+    const loadDefaultTemplate = async () => {
+        const templates = await runGAS('getTemplates') as Template[];
+        if (templates && templates.length > 0) {
+            setFields(templates[0].structureJSON);
+            setTemplateName(templates[0].name);
+        }
+    };
+
+    const addField = (type: TemplateField['type']) => {
+        const newField: TemplateField = {
+            id: `field_${Date.now()}`,
+            type,
+            label: 'New Question',
+            required: false,
+            layout: 'full' // Default to full width
+        };
+        setFields([...fields, newField]);
+    };
+
+    const updateField = (id: string, updates: Partial<TemplateField>) => {
+        setFields(fields.map(f => f.id === id ? { ...f, ...updates } : f));
+    };
+
+    const removeField = (id: string) => {
+        setFields(fields.filter(f => f.id !== id));
+    };
+
+    const moveField = (index: number, direction: 'up' | 'down') => {
+        if (
+            (direction === 'up' && index === 0) ||
+            (direction === 'down' && index === fields.length - 1)
+        ) return;
+
+        const newFields = [...fields];
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        [newFields[index], newFields[targetIndex]] = [newFields[targetIndex], newFields[index]];
+        setFields(newFields);
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            await runGAS('saveTemplate', templateName, fields);
+            alert('Template saved successfully!');
+        } catch {
+            alert('Failed to save template');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-nano-gray-50 flex flex-col">
+            {/* Header */}
+            <header className="bg-white border-b border-nano-gray-200 sticky top-0 z-10">
+                <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+                    <div>
+                        <h1 className="text-2xl font-semibold text-nano-gray-900">
+                            Template Builder
+                        </h1>
+                        <p className="text-sm text-nano-gray-600 mt-1">
+                            Create and manage reference templates
+                        </p>
+                    </div>
+                    <div className="flex gap-3">
+                        <div className="flex bg-nano-gray-100 p-1 rounded-lg">
+                            <button
+                                onClick={() => setActiveTab('builder')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'builder'
+                                    ? 'bg-white text-nano-gray-900 shadow-sm'
+                                    : 'text-nano-gray-600 hover:text-nano-gray-900'
+                                    }`}
+                            >
+                                Editor
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('preview')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'preview'
+                                    ? 'bg-white text-nano-gray-900 shadow-sm'
+                                    : 'text-nano-gray-600 hover:text-nano-gray-900'
+                                    }`}
+                            >
+                                Preview
+                            </button>
+                        </div>
+                        <Button onClick={handleSave} disabled={isSaving}>
+                            {isSaving ? 'Saving...' : 'Save Template'}
+                        </Button>
+                    </div>
+                </div>
+            </header>
+
+            {/* Main Content */}
+            <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex gap-8">
+                {/* Editor Column */}
+                <div className={`flex-1 ${activeTab === 'preview' ? 'hidden md:block' : ''}`}>
+                    <Card className="h-full flex flex-col">
+                        <div className="p-6 border-b border-nano-gray-200">
+                            <label className="block text-sm font-medium text-nano-gray-700 mb-2">
+                                Template Name
+                            </label>
+                            <Input
+                                value={templateName}
+                                onChange={(e) => setTemplateName(e.target.value)}
+                                placeholder="e.g., Senior Developer Reference"
+                            />
+                        </div>
+
+                        <div className="p-6 flex-1 overflow-y-auto">
+                            <div className="space-y-4">
+                                {fields.map((field, index) => (
+                                    <div key={field.id} className="bg-nano-gray-50 p-4 rounded-lg border border-nano-gray-200 group">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="bg-white px-2 py-1 rounded text-xs font-mono text-nano-gray-500 border border-nano-gray-200 uppercase">
+                                                    {field.type}
+                                                </span>
+                                                <div className="flex flex-col">
+                                                    <button
+                                                        onClick={() => moveField(index, 'up')}
+                                                        disabled={index === 0}
+                                                        className="text-nano-gray-400 hover:text-semester-blue disabled:opacity-30 text-xs"
+                                                    >
+                                                        ▲
+                                                    </button>
+                                                    <button
+                                                        onClick={() => moveField(index, 'down')}
+                                                        disabled={index === fields.length - 1}
+                                                        className="text-nano-gray-400 hover:text-semester-blue disabled:opacity-30 text-xs"
+                                                    >
+                                                        ▼
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => removeField(field.id)}
+                                                className="text-status-error opacity-0 group-hover:opacity-100 transition-opacity text-sm hover:underline"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-xs font-medium text-nano-gray-500 mb-1">Question Label</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-3 py-2 rounded border border-nano-gray-300 focus:ring-semester-blue focus:border-semester-blue text-sm"
+                                                    value={field.label}
+                                                    onChange={(e) => updateField(field.id, { label: e.target.value })}
+                                                />
+                                            </div>
+
+                                            {/* Layout option for desktop */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-nano-gray-500 mb-1">Field Width (Desktop)</label>
+                                                <select
+                                                    className="w-full px-3 py-2 rounded border border-nano-gray-300 focus:ring-semester-blue focus:border-semester-blue text-sm"
+                                                    value={field.layout || 'full'}
+                                                    onChange={(e) => updateField(field.id, { layout: e.target.value as 'full' | 'half' })}
+                                                >
+                                                    <option value="full">Full Width</option>
+                                                    <option value="half">Half Width</option>
+                                                </select>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`req-${field.id}`}
+                                                    checked={field.required}
+                                                    onChange={(e) => updateField(field.id, { required: e.target.checked })}
+                                                    className="rounded border-nano-gray-300 text-semester-blue focus:ring-semester-blue"
+                                                />
+                                                <label htmlFor={`req-${field.id}`} className="text-sm text-nano-gray-700">Required field</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {fields.length === 0 && (
+                                    <div className="text-center py-12 text-nano-gray-400 border-2 border-dashed border-nano-gray-200 rounded-lg">
+                                        <p>No fields added yet.</p>
+                                        <p className="text-sm mt-1">Click a button below to start building.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-nano-gray-200 bg-nano-gray-50 rounded-b-xl">
+                            <p className="text-xs font-medium text-nano-gray-500 uppercase mb-3">Add Field</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <button
+                                    onClick={() => addField('rating')}
+                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                >
+                                    ⭐ Rating
+                                </button>
+                                <button
+                                    onClick={() => addField('text')}
+                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                >
+                                    📝 Text
+                                </button>
+                                <button
+                                    onClick={() => addField('boolean')}
+                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                >
+                                    ✓ Yes/No
+                                </button>
+                                <button
+                                    onClick={() => addField('date')}
+                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                >
+                                    📅 Date
+                                </button>
+                                <button
+                                    onClick={() => addField('textarea')}
+                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                >
+                                    📄 Long Text
+                                </button>
+                                <button
+                                    onClick={() => addField('signature')}
+                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                >
+                                    ✍️ Signature
+                                </button>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+
+                {/* Preview Column */}
+                <div className={`flex-1 ${activeTab === 'builder' ? 'hidden md:block' : ''}`}>
+                    <div className="sticky top-24">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-semibold text-nano-gray-900">Live Preview</h2>
+
+                            {/* Preview Mode Toggle */}
+                            <div className="flex bg-nano-gray-100 p-1 rounded-lg">
+                                <button
+                                    onClick={() => setPreviewMode('mobile')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${previewMode === 'mobile'
+                                        ? 'bg-white text-nano-gray-900 shadow-sm'
+                                        : 'text-nano-gray-600 hover:text-nano-gray-900'
+                                        }`}
+                                >
+                                    📱 Mobile
+                                </button>
+                                <button
+                                    onClick={() => setPreviewMode('desktop')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${previewMode === 'desktop'
+                                        ? 'bg-white text-nano-gray-900 shadow-sm'
+                                        : 'text-nano-gray-600 hover:text-nano-gray-900'
+                                        }`}
+                                >
+                                    💻 Desktop
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Mobile Preview */}
+                        {previewMode === 'mobile' && (
+                            <div className="mx-auto max-w-[375px] border-[8px] border-nano-gray-800 rounded-[3rem] overflow-hidden bg-white shadow-xl h-[700px] relative">
+                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/3 h-6 bg-nano-gray-800 rounded-b-xl z-20"></div>
+                                <div className="h-full overflow-y-auto bg-nano-gray-50 scrollbar-hide">
+                                    <div className="p-6 pt-12">
+                                        <div className="text-center mb-6">
+                                            <h1 className="text-xl font-bold text-nano-gray-900">Semester Reference</h1>
+                                            <p className="mt-1 text-xs text-nano-gray-600">
+                                                Reference for <span className="font-semibold">Candidate Name</span>
+                                            </p>
+                                        </div>
+
+                                        <Card className="p-4 shadow-sm">
+                                            <DynamicForm
+                                                structure={fields}
+                                                onSubmit={(data) => console.log('Preview Submit:', data)}
+                                                previewMode="mobile"
+                                            />
+                                        </Card>
+
+                                        <div className="mt-6 text-center text-[10px] text-nano-gray-400">
+                                            &copy; {new Date().getFullYear()} Semester. All rights reserved.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Desktop Preview */}
+                        {previewMode === 'desktop' && (
+                            <Card className="p-8 bg-white shadow-lg">
+                                <div className="max-w-4xl mx-auto">
+                                    <div className="text-center mb-8">
+                                        <h1 className="text-3xl font-bold text-nano-gray-900">Semester Reference</h1>
+                                        <p className="mt-2 text-sm text-nano-gray-600">
+                                            Reference for <span className="font-semibold">Candidate Name</span>
+                                        </p>
+                                    </div>
+
+                                    <DynamicForm
+                                        structure={fields}
+                                        onSubmit={(data) => console.log('Preview Submit:', data)}
+                                        previewMode="desktop"
+                                    />
+
+                                    <div className="mt-8 text-center text-xs text-nano-gray-400 border-t border-nano-gray-200 pt-6">
+                                        &copy; {new Date().getFullYear()} Semester. All rights reserved. Secure reference processing.
+                                    </div>
+                                </div>
+                            </Card>
+                        )}
+                    </div>
+                </div>
+            </main>
+        </div>
+    );
+};
+
+export default TemplateBuilder;

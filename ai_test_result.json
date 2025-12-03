@@ -1,0 +1,1 @@
+{"success":true,"analysis":{"configured":true,"sentimentScore":"Error","summary":["Error analyzing reference: TypeError: Cannot read properties of null (reading 'getSheetByName')"],"anomalies":[]}}
