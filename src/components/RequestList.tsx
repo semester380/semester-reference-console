@@ -116,7 +116,11 @@ export const RequestList: React.FC<RequestListProps> = ({
 
     const getMockRefereeLink = (req: Request) => {
         // Only use refereeToken if it exists. Do not fall back to req.token (which is consent token).
-        const token = req.refereeToken || `referee-${req.requestId}`;
+        const token = req.refereeToken;
+        if (!token) {
+            // If no referee token (e.g. consent not given yet), return empty or handle gracefully
+            return '#';
+        }
         return `${window.location.origin}?view=portal&token=${token}`;
     };
 
