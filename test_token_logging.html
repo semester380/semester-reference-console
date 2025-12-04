@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test Token Validation with Logging</title>
+</head>
+
+<body>
+    <h1>Test Token Validation</h1>
+    <button onclick="testValidation()">Test Referee Token with Logging</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function testValidation() {
+            const gasUrl = 'https://script.google.com/macros/s/AKfycbxftUzpcjLn0fdNctnHISL6OkAgh5XvsmiJw90ow_vbHGwodzq6Wfjmf6mkXN910tA5/exec';
+
+            // Using the known referee token from "Decline Test v2"
+            const token = 'a8603612-421b-410a-8c88-75170d304917';
+
+            document.getElementById('output').textContent = 'Testing...\\n';
+
+            try {
+                const response = await fetch(gasUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8',
+                    },
+                    body: JSON.stringify({
+                        action: 'validateRefereeToken',
+                        token: token
+                    }),
+                    mode: 'cors',
+                });
+
+                const result = await response.json();
+                document.getElementById('output').textContent += JSON.stringify(result, null, 2);
+
+                console.log('validateRefereeToken result:', result);
+                console.log('Now check Apps Script execution logs for detailed token comparison');
+
+            } catch (error) {
+                document.getElementById('output').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+
+</html>

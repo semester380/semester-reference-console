@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Final Production Checks</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .step {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #0052CC;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            overflow-x: auto;
+        }
+
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Final Production Readiness Checks</h1>
+
+    <div class="step">
+        <h3>1. Submit Reference & Generate PDF</h3>
+        <p>Uses Request ID: c3798d2c-1bd3-4df6-843d-9038599cf457</p>
+        <button onclick="runPdfFlow()">Run PDF Flow</button>
+        <pre id="pdf-output">Waiting...</pre>
+    </div>
+
+    <div class="step">
+        <h3>2. Test Smart Chase</h3>
+        <button onclick="runSmartChase()">Run Smart Chase</button>
+        <pre id="chase-output">Waiting...</pre>
+    </div>
+
+    <div class="step">
+        <h3>3. Check AI Configuration</h3>
+        <button onclick="checkAi()">Check AI</button>
+        <pre id="ai-output">Waiting...</pre>
+    </div>
+
+    <script>
+        const gasUrl = 'https://script.google.com/macros/s/AKfycbxftUzpcjLn0fdNctnHISL6OkAgh5XvsmiJw90ow_vbHGwodzq6Wfjmf6mkXN910tA5/exec';
+        const requestId = 'c3798d2c-1bd3-4df6-843d-9038599cf457';
+        const refereeToken = '4fb5b38a-ff59-4035-8ac1-9a67a10d332f';
+
+        async function runPdfFlow() {
+            const output = document.getElementById('pdf-output');
+            output.textContent = 'Submitting reference...';
+
+            try {
+                // 1. Submit
+                const submitResp = await fetch(gasUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'submitReference',
+                        token: refereeToken,
+                        method: 'form',
+                        responses: {
+                            q1: 5,
+                            q2: 5,
+                            q3: true,
+                            q4: 'Excellent candidate, highly recommended.',
+                            sig1: { typedName: 'Test Referee', signedAt: new Date().toISOString() }
+                        }
+                    }),
+                    mode: 'cors'
+                });
+                const submitResult = await submitResp.json();
+                output.textContent += '\nSubmit Result: ' + JSON.stringify(submitResult);
+
+                if (!submitResult.success && submitResult.error !== 'Reference already submitted') {
+                    throw new Error(submitResult.error);
+                }
+
+                // 2. Generate PDF
+                output.textContent += '\n\nGenerating PDF...';
+                const pdfResp = await fetch(gasUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'sealRequest',
+                        requestId: requestId
+                    }),
+                    mode: 'cors'
+                });
+                const pdfResult = await pdfResp.json();
+                output.textContent += '\nPDF Result: ' + JSON.stringify(pdfResult);
+
+                if (pdfResult.success && pdfResult.pdfUrl) {
+                    output.innerHTML += `<br><br><a href="${pdfResult.pdfUrl}" target="_blank" class="success">✅ Download PDF</a>`;
+                }
+            } catch (error) {
+                output.textContent += '\n\n❌ Error: ' + error.message;
+            }
+        }
+
+        async function runSmartChase() {
+            const output = document.getElementById('chase-output');
+            output.textContent = 'Running Smart Chase...';
+
+            try {
+                const response = await fetch(gasUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'runSmartChase' }),
+                    mode: 'cors'
+                });
+                const result = await response.json();
+                output.textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                output.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function checkAi() {
+            const output = document.getElementById('ai-output');
+            output.textContent = 'Checking AI...';
+
+            try {
+                const response = await fetch(gasUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'runAnalysis',
+                        requestId: requestId
+                    }),
+                    mode: 'cors'
+                });
+                const result = await response.json();
+                output.textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                output.textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -191,13 +191,30 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
 
     // Ensure responses is an object (handle JSON string from Sheets)
     let responses = requestData?.responses || {};
+
+    // Robust parsing for potentially double-encoded JSON
     if (typeof responses === 'string') {
         try {
-            responses = JSON.parse(responses);
+            const parsed = JSON.parse(responses);
+            responses = parsed;
+
+            // Handle double encoding
+            if (typeof responses === 'string') {
+                try {
+                    responses = JSON.parse(responses);
+                } catch {
+                    // Keep as string if second parse fails
+                }
+            }
         } catch (e) {
             console.error('Failed to parse responses JSON:', e);
             responses = {};
         }
+    }
+
+    // Final safety check - if still not an object, make it one
+    if (typeof responses !== 'object' || responses === null) {
+        responses = { value: String(responses) };
     }
     const hasSignature = Object.values(responses).some(
         (value: unknown) => value && typeof value === 'object' && 'typedName' in value

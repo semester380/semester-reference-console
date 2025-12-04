@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Debug - View Sheet Data</title>
+</head>
+
+<body>
+    <h1>Debug Database</h1>
+    <button onclick="viewAllRequests()">View All Requests Raw Data</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function viewAllRequests() {
+            const gasUrl = 'https://script.google.com/macros/s/AKfycbxftUzpcjLn0fdNctnHISL6OkAgh5XvsmiJw90ow_vbHGwodzq6Wfjmf6mkXN910tA5/exec';
+
+            try {
+                const response = await fetch(gasUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8',
+                    },
+                    body: JSON.stringify({ action: 'getMyRequests' }),
+                    mode: 'cors',
+                });
+
+                const result = await response.json();
+
+                if (result.data) {
+                    // Find v2 request
+                    const v2Request = result.data.find(r => r.candidateName === 'Decline Test v2');
+
+                    if (v2Request) {
+                        const output = {
+                            requestId: v2Request.requestId,
+                            status: v2Request.status,
+                            consentStatus: v2Request.consentStatus,
+                            consentToken: v2Request.token,
+                            refereeToken: v2Request.refereeToken,
+                            fullData: v2Request
+                        };
+
+                        document.getElementById('output').textContent = JSON.stringify(output, null, 2);
+                        console.log('Decline Test v2 data:', output);
+                    } else {
+                        document.getElementById('output').textContent = 'Decline Test v2 not found';
+                    }
+                } else {
+                    document.getElementById('output').textContent = JSON.stringify(result, null, 2);
+                }
+            } catch (error) {
+                document.getElementById('output').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+
+</html>

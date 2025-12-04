@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Check Request Status</title>
+</head>
+
+<body>
+    <h1>Check Request Status</h1>
+    <button onclick="checkStatus()">Check Test Request Status</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function checkStatus() {
+            const gasUrl = 'https://script.google.com/macros/s/AKfycbxftUzpcjLn0fdNctnHISL6OkAgh5XvsmiJw90ow_vbHGwodzq6Wfjmf6mkXN910tA5/exec';
+
+            try {
+                const response = await fetch(gasUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8',
+                    },
+                    body: JSON.stringify({
+                        action: 'getRequest',
+                        requestId: 'd2091c62-959c-486a-8533-339243763f69'
+                    }),
+                    mode: 'cors',
+                });
+
+                const result = await response.json();
+                document.getElementById('output').textContent = JSON.stringify(result, null, 2);
+
+                if (result.data) {
+                    console.log('Request Status:', result.data.status);
+                    console.log('Consent Status:', result.data.consentStatus);
+                    console.log('Referee Token:', result.data.refereeToken);
+                }
+            } catch (error) {
+                document.getElementById('output').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+
+</html>

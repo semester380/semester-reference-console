@@ -124,6 +124,9 @@ function handleApiRequest(e) {
       case 'uploadReferenceDocument':
         result = uploadReferenceDocument(payload);
         break;
+      case 'runE2ETest':
+        result = runCompleteE2ETest();
+        break;
       default:
         result = { success: false, error: "Unknown action: " + action };
     }
@@ -338,11 +341,14 @@ function sendAuthorizationEmail(email, name, token, refereeName) {
   // Or if serving via GAS, use webAppUrl
   
   // Construct the URL to the React App (Portal)
-  // If running locally, this might be localhost. If prod, it's the deployed URL.
-  // We'll use the GAS Web App URL as the base for now, assuming it redirects or serves the app.
-  // Ideally, this should be a property.
-  const portalBaseUrl = PropertiesService.getScriptProperties().getProperty('PORTAL_BASE_URL') || webAppUrl;
-  const authUrl = `${portalBaseUrl}?view=portal&token=${token}`;
+  // Use the configured PORTAL_BASE_URL or fallback to the Vercel app
+  const portalBaseUrl = PropertiesService.getScriptProperties().getProperty('PORTAL_BASE_URL') || 'https://semester-reference-console-nmd4bhpey-robs-projects-ae895b9a.vercel.app/';
+  
+  // Ensure we don't double-slash
+  const baseUrl = portalBaseUrl.endsWith('/') ? portalBaseUrl.slice(0, -1) : portalBaseUrl;
+  
+  // React App Route: /?view=portal&action=authorize&token=...
+  const authUrl = `${baseUrl}/?view=portal&action=authorize&token=${token}`;
   
   const subject = `Action Required: Authorize Reference Request for ${refereeName}`;
   const htmlBody = `
@@ -411,7 +417,7 @@ function processCandidateConsent(token, decision) {
     if (decision === 'CONSENT_GIVEN') {
       requestsSheet.getRange(rowIndex + 1, 7).setValue('CONSENT_GIVEN'); // Status
       requestsSheet.getRange(rowIndex + 1, 8).setValue('GRANTED'); // ConsentStatus
-      requestsSheet.getRange(rowIndex + 1, 9).setValue(now); // ConsentTimestamp
+      requestsSheet.getRange(rowIndex + 1, 9).setValue(now); // ConsentTimestamp (column 9, index 8)
       
       // Generate Referee Token
       const refereeToken = Utilities.getUuid();
@@ -441,8 +447,12 @@ function processCandidateConsent(token, decision) {
 
 function sendRefereeInviteEmail(email, name, candidateName, token) {
   const webAppUrl = ScriptApp.getService().getUrl();
-  const portalBaseUrl = PropertiesService.getScriptProperties().getProperty('PORTAL_BASE_URL') || webAppUrl;
-  const inviteUrl = `${portalBaseUrl}?view=portal&token=${token}`;
+  const portalBaseUrl = PropertiesService.getScriptProperties().getProperty('PORTAL_BASE_URL') || 'https://semester-reference-console-nmd4bhpey-robs-projects-ae895b9a.vercel.app/';
+  
+  // Ensure we don't double-slash
+  const baseUrl = portalBaseUrl.endsWith('/') ? portalBaseUrl.slice(0, -1) : portalBaseUrl;
+  
+  const inviteUrl = `${baseUrl}/?view=portal&token=${token}`;
   
   const subject = `Reference Request for ${candidateName} - Semester`;
   const htmlBody = `
@@ -470,30 +480,44 @@ function sendRefereeInviteEmail(email, name, candidateName, token) {
  * Validate referee token and return form data
  */
 function validateRefereeToken(token) {
+  console.log(`[validateRefereeToken] Looking for token: "${token}"`);
+  console.log(`[validateRefereeToken] Token type: ${typeof token}, length: ${token ? token.length : 0}`);
+  
   const ss = getDatabaseSpreadsheet();
   const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
   const data = requestsSheet.getDataRange().getValues();
   
+  console.log(`[validateRefereeToken] Total rows (including header): ${data.length}`);
+  
   let request = null;
   for (let i = 1; i < data.length; i++) {
-    if (data[i][11] === token) { // RefereeToken column
+    const sheetToken = data[i][11]; // RefereeToken column
+    console.log(`[validateRefereeToken] Row ${i}: sheetToken="${sheetToken}", type=${typeof sheetToken}, match=${sheetToken === token}`);
+    
+    if (sheetToken === token) { // RefereeToken column
+      console.log(`[validateRefereeToken] MATCH FOUND at row ${i}`);
       request = data[i];
       break;
     }
   }
   
   if (!request) {
+    console.log(`[validateRefereeToken] No match found - returning Invalid token`);
     return { valid: false, error: "Invalid token" };
   }
+  
+  console.log(`[validateRefereeToken] Token validated successfully`);
   
   // Check Expiry
   const expiry = new Date(request[12]);
   if (new Date() > expiry) {
+    console.log(`[validateRefereeToken] Token expired`);
     return { valid: false, error: "Token expired" };
   }
   
   // Check if already completed
   if (['Completed', 'Declined', 'SEALED'].includes(request[6])) {
+     console.log(`[validateRefereeToken] Reference already submitted, status: ${request[6]}`);
      return { valid: false, error: "Reference already submitted" };
   }
   
@@ -503,6 +527,7 @@ function validateRefereeToken(token) {
   const templateId = request[13];
   const template = templates.find(t => t.templateId === templateId) || templates[0];
   
+  console.log(`[validateRefereeToken] Returning valid response`);
   return {
     valid: true,
     candidateName: request[1],

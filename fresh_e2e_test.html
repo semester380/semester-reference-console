@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Fresh End-to-End Test</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .step {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .step-title {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #0052CC;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #0052CC;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #003d99;
+        }
+
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔬 Fresh End-to-End Production Readiness Test</h1>
+
+    <div class="step">
+        <div class="step-title">STEP 1: Create New Request</div>
+        <button onclick="createRequest()">Create Fresh Test Request</button>
+        <pre id="step1-output">Waiting...</pre>
+    </div>
+
+    <div class="step">
+        <div class="step-title">STEP 2: Retrieve Consent Token</div>
+        <button onclick="getTokens()">Get Consent Token</button>
+        <pre id="step2-output">Waiting...</pre>
+    </div>
+
+    <div class="step">
+        <div class="step-title">STEP 3: Process Consent</div>
+        <button onclick="giveConsent()">Give Consent</button>
+        <pre id="step3-output">Waiting...</pre>
+    </div>
+
+    <div class="step">
+        <div class="step-title">STEP 4: Retrieve Referee Token</div>
+        <button onclick="getRefereeToken()">Get Referee Token</button>
+        <pre id="step4-output">Waiting...</pre>
+    </div>
+
+    <div class="step">
+        <div class="step-title">STEP 5: Validate Referee Token</div>
+        <button onclick="validateToken()">Validate Referee Token</button>
+        <pre id="step5-output">Waiting...</pre>
+    </div>
+
+    <script>
+        const gasUrl = 'https://script.google.com/macros/s/AKfycbxftUzpcjLn0fdNctnHISL6OkAgh5XvsmiJw90ow_vbHGwodzq6Wfjmf6mkXN910tA5/exec';
+        let testData = {
+            requestId: null,
+            consentToken: null,
+            refereeToken: null
+        };
+
+        async function createRequest() {
+            const output = document.getElementById('step1-output');
+            output.textContent = 'Creating request...';
+
+            try {
+                const response = await fetch(gasUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'initiateRequest',
+                        candidateName: 'Production Test ' + new Date().getTime(),
+                        candidateEmail: 'test@example.com',
+                        refereeName: 'Test Referee',
+                        refereeEmail: 'test@example.com',
+                        templateId: 'default'
+                    }),
+                    mode: 'cors'
+                });
+
+                const result = await response.json();
+                output.textContent = JSON.stringify(result, null, 2);
+
+                if (result.success) {
+                    testData.requestId = result.requestId;
+                    console.log('✅ Request created:', testData.requestId);
+                }
+            } catch (error) {
+                output.textContent = 'ERROR: ' + error.message;
+            }
+        }
+
+        async function getTokens() {
+            const output = document.getElementById('step2-output');
+            output.textContent = 'Fetching request data...';
+
+            try {
+                const response = await fetch(gasUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'getMyRequests'
+                    }),
+                    mode: 'cors'
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    const request = result.data.find(r => r.requestId === testData.requestId);
+                    if (request) {
+                        testData.consentToken = request.token;
+                        output.textContent = JSON.stringify({
+                            requestId: request.requestId,
+                            status: request.status,
+                            consentToken: request.token
+                        }, null, 2);
+                        console.log('✅ Consent token:', testData.consentToken);
+                    } else {
+                        output.textContent = 'Request not found in data';
+                    }
+                } else {
+                    output.textContent = JSON.stringify(result, null, 2);
+                }
+            } catch (error) {
+                output.textContent = 'ERROR: ' + error.message;
+            }
+        }
+
+        async function giveConsent() {
+            const output = document.getElementById('step3-output');
+            output.textContent = 'Processing consent...';
+
+            try {
+                const response = await fetch(gasUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'authorizeConsent',
+                        token: testData.consentToken,
+                        decision: 'CONSENT_GIVEN'
+                    }),
+                    mode: 'cors'
+                });
+
+                const result = await response.json();
+                output.textContent = JSON.stringify(result, null, 2);
+                console.log('✅ Consent result:', result);
+            } catch (error) {
+                output.textContent = 'ERROR: ' + error.message;
+            }
+        }
+
+        async function getRefereeToken() {
+            const output = document.getElementById('step4-output');
+            output.textContent = 'Fetching referee token...';
+
+            try {
+                const response = await fetch(gasUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'getMyRequests'
+                    }),
+                    mode: 'cors'
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    const request = result.data.find(r => r.requestId === testData.requestId);
+                    if (request) {
+                        testData.refereeToken = request.refereeToken;
+                        output.textContent = JSON.stringify({
+                            requestId: request.requestId,
+                            status: request.status,
+                            consentStatus: request.consentStatus,
+                            refereeToken: request.refereeToken
+                        }, null, 2);
+                        console.log('✅ Referee token:', testData.refereeToken);
+                    } else {
+                        output.textContent = 'Request not found';
+                    }
+                } else {
+                    output.textContent = JSON.stringify(result, null, 2);
+                }
+            } catch (error) {
+                output.textContent = 'ERROR: ' + error.message;
+            }
+        }
+
+        async function validateToken() {
+            const output = document.getElementById('step5-output');
+            output.textContent = 'Validating referee token...';
+
+            try {
+                const response = await fetch(gasUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'validateRefereeToken',
+                        token: testData.refereeToken
+                    }),
+                    mode: 'cors'
+                });
+
+                const result = await response.json();
+                output.textContent = JSON.stringify(result, null, 2);
+
+                if (result.valid) {
+                    output.textContent += '\n\n✅ SUCCESS! Token validation working!';
+                    console.log('✅✅✅ validation SUCCESS!');
+                } else {
+                    output.textContent += '\n\n❌ FAILED: ' + result.error;
+                    console.log('❌ Validation failed:', result.error);
+                }
+            } catch (error) {
+                output.textContent = 'ERROR: ' + error.message;
+            }
+        }
+    </script>
+</body>
+
+</html>

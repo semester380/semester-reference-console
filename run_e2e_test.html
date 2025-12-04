@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Run E2E Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #00ff00;
+        }
+
+        button {
+            padding: 15px 30px;
+            background: #00ff00;
+            color: #000;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #00cc00;
+        }
+
+        pre {
+            background: #000;
+            padding: 15px;
+            border: 1px solid #00ff00;
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔬 Run Complete E2E Test in Apps Script</h1>
+    <button onclick="runTest()">Execute runCompleteE2ETest()</button>
+    <pre id="output">Click button to run test...</pre>
+
+    <script>
+        async function runTest() {
+            const gasUrl = 'https://script.google.com/macros/s/AKfycbxftUzpcjLn0fdNctnHISL6OkAgh5XvsmiJw90ow_vbHGwodzq6Wfjmf6mkXN910tA5/exec';
+            const output = document.getElementById('output');
+            output.textContent = 'Running test via GAS API...\n\n';
+
+            try {
+                // Note: We can't call runCompleteE2ETest directly via the API because it's not in handleApiRequest
+                // Instead, let's manually invoke via a GET request which Apps Script will execute
+
+                // Actually, we need to add this to handleApiRequest first
+                // For now, let's document that you need to run this in Apps Script directly
+
+                output.textContent = `To run the E2E test:
+
+1. Open Apps Script editor: https://script.google.com/home/projects/17Mc3vAggYvd0VbI_dEQDJOORXHXjv0wqckRTO8pJvjNF4FobOKVsa2To/edit
+
+2. Select the file "E2ETest.gs" from the file list
+
+3. Select function "runCompleteE2ETest" from the dropdown
+
+4. Click the "Run" button
+
+5. Check the "Execution log" at the bottom for detailed output
+
+This will create a fresh request, process consent, and validate the referee token,
+logging every step to help identify the exact issue.
+
+The logs will show:
+- Each step of the process
+- Token values at each stage  
+- Direct sheet comparison
+- Character-by-character analysis if validation fails
+
+Alternatively, I can add this to the API handler...`;
+
+            } catch (error) {
+                output.textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Get Request Data</title>
+</head>
+<body>
+    <h1>Fetch Request Data</h1>
+    <button onclick="fetchData()">Fetch getMyRequests</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function fetchData() {
+            const gasUrl = 'https://script.google.com/macros/s/AKfycbxftUzpcjLn0fdNctnHISL6OkAgh5XvsmiJw90ow_vbHGwodzq6Wfjmf6mkXN910tA5/exec';
+            
+            try {
+                const response = await fetch(gasUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8',
+                    },
+                    body: JSON.stringify({ action: 'getMyRequests' }),
+                    mode: 'cors',
+                });
+                
+                const result = await response.json();
+                document.getElementById('output').textContent = JSON.stringify(result, null, 2);
+                
+                // Find our test request
+                if (result.data) {
+                    const testRequest = result.data.find(r => r.candidateName === 'Test Decline Candidate');
+                    if (testRequest) {
+                        console.log('Test Request Found:');
+                        console.log('Request ID:', testRequest.requestId);
+                        console.log('Consent Token:', testRequest.token);
+                        console.log('Referee Token:', testRequest.refereeToken);
+                        console.log('Status:', testRequest.status);
+                    }
+                }
+            } catch (error) {
+                document.getElementById('output').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
