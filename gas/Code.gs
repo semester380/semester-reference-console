@@ -225,6 +225,15 @@ function handleApiRequest(e) {
       case 'getDefaultTemplate':
         result = { success: true, template: getDefaultTemplate() };
         break;
+      case 'getDebugTokens':
+        // Temporary for E2E audit
+        const auditEmail = payload.email;
+        if (auditEmail) {
+           result = { success: true, tokens: getLatestRequestTokens(auditEmail) };
+        } else {
+           result = { success: false, error: "Email required" };
+        }
+        break;
       default:
         result = { success: false, error: "Unknown action: " + action };
     }
