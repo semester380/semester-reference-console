@@ -51,16 +51,4 @@ function inspectSheetStructure() {
     return { success: false, error: e.toString() };
   }
 }
-
-/**
- * Helper function copied from Code.gs for reference
- */
-function getDatabaseSpreadsheet() {
-  const DB_SPREADSHEET_NAME = 'SRC_Database';
-  const files = DriveApp.getFilesByName(DB_SPREADSHEET_NAME);
-  if (files.hasNext()) {
-    return SpreadsheetApp.open(files.next());
-  } else {
-    return SpreadsheetApp.create(DB_SPREADSHEET_NAME);
-  }
-}
+// Note: getDatabaseSpreadsheet is defined in Code.gs

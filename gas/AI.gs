@@ -1,20 +1,8 @@
 /**
  * Semester Reference Console - AI & Automation Module
  * Handles Gemini API integration and intelligent automation
+ * Note: getDatabaseSpreadsheet and logAudit are defined in Code.gs
  */
-
-/**
- * Get or create the master spreadsheet (duplicated from Code.gs for cross-file access)
- */
-function getDatabaseSpreadsheet() {
-  const DB_SPREADSHEET_NAME = "SRC_Database";
-  const files = DriveApp.getFilesByName(DB_SPREADSHEET_NAME);
-  if (files.hasNext()) {
-    return SpreadsheetApp.open(files.next());
-  } else {
-    return SpreadsheetApp.create(DB_SPREADSHEET_NAME);
-  }
-}
 
 /**
  * Analyze sentiment and detect anomalies using Gemini API
