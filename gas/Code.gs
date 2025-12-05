@@ -25,6 +25,83 @@ const COL_REFEREE_EMAIL = 4;
 const COL_STATUS = 6;
 const COL_ARCHIVED = 24; // New column for archive flag
 
+// --- Default Template Definition ---
+const DEFAULT_TEMPLATE = {
+  id: "standard-social-care",
+  name: "Standard Social Care Reference",
+  isDefault: true,
+  ratingScale: ["Excellent", "Very Good", "Good", "Fair", "Poor"],
+  sections: [
+    {
+      id: "employment",
+      title: "Employment Details",
+      fields: [
+        { id: "dateStarted", label: "Date Started", type: "date", required: true },
+        { id: "dateEnded", label: "Date Ended", type: "date", required: true },
+        { id: "jobTitle", label: "Job Title", type: "text", required: true },
+        { id: "reasonForLeaving", label: "Reason for Leaving", type: "textarea", required: true },
+        { id: "safeguardingConcerns", label: "Were there any safeguarding concerns during employment?", type: "boolean", required: true },
+        { id: "safeguardingDetails", label: "If yes, please provide details", type: "textarea", required: false },
+        { id: "disciplinaryAction", label: "Was the candidate subject to any disciplinary action?", type: "boolean", required: true },
+        { id: "disciplinaryDetails", label: "If yes, please provide details", type: "textarea", required: false }
+      ]
+    },
+    {
+      id: "ratings",
+      title: "Ratings & Attributes",
+      description: "Please rate the candidate on the following attributes:",
+      fields: [
+        { id: "suitableForRole", label: "Suitable for Role", type: "rating", required: true },
+        { id: "punctuality", label: "Punctuality", type: "rating", required: true },
+        { id: "attitude", label: "Attitude to Work", type: "rating", required: true },
+        { id: "reliability", label: "Reliability", type: "rating", required: true },
+        { id: "honesty", label: "Honesty & Integrity", type: "rating", required: true },
+        { id: "initiative", label: "Initiative", type: "rating", required: true },
+        { id: "communication", label: "Communication Skills", type: "rating", required: true },
+        { id: "furtherInfo", label: "Any further information about the candidate's performance?", type: "textarea", required: false }
+      ]
+    },
+    {
+      id: "safeguarding",
+      title: "Safeguarding & Professional Judgement",
+      fields: [
+        { id: "characterReservations", label: "Do you have any reservations about the candidate's character or conduct?", type: "boolean", required: true },
+        { id: "reservationDetails", label: "If yes, please provide details", type: "textarea", required: false },
+        { id: "shouldNotBeEmployed", label: "Is there any reason the candidate should NOT be employed to work with vulnerable persons?", type: "boolean", required: true },
+        { id: "shouldNotBeEmployedDetails", label: "If yes, please explain", type: "textarea", required: false },
+        { id: "knowsROA", label: "Does the candidate have knowledge of the Rehabilitation of Offenders Act?", type: "boolean", required: false }
+      ]
+    },
+    {
+      id: "consent",
+      title: "Consent to Share",
+      fields: [
+        { id: "consentToShare", label: "Are you happy for this reference to be shared with third-party clients?", type: "boolean", required: true }
+      ]
+    },
+    {
+      id: "declaration",
+      title: "Declaration",
+      description: "Please confirm your details below:",
+      fields: [
+        { id: "refereeName", label: "Your Full Name", type: "text", required: true },
+        { id: "refereePosition", label: "Your Position/Title", type: "text", required: true },
+        { id: "refereeCompany", label: "Company/Organisation", type: "text", required: true },
+        { id: "refereeTelephone", label: "Telephone Number", type: "text", required: true },
+        { id: "refereeEmailConfirm", label: "Email Address", type: "email", required: true },
+        { id: "signature", label: "Digital Signature", type: "signature", required: true }
+      ]
+    }
+  ]
+};
+
+/**
+ * Get the default template definition
+ */
+function getDefaultTemplate() {
+  return DEFAULT_TEMPLATE;
+}
+
 /**
  * Serves the React application via HtmlService OR handles JSON API requests
  */
@@ -144,6 +221,9 @@ function handleApiRequest(e) {
         break;
       case 'deleteRequests':
         result = deleteRequests(payload.requestIds);
+        break;
+      case 'getDefaultTemplate':
+        result = { success: true, template: getDefaultTemplate() };
         break;
       default:
         result = { success: false, error: "Unknown action: " + action };
@@ -1035,39 +1115,113 @@ function generatePDF(requestId, request) {
 }
 
 function buildFormContent(responses) {
-  let html = '<div class="section"><div class="section-title">Reference Response</div>';
+  const template = DEFAULT_TEMPLATE;
+  let html = '';
   
-  for (const key in responses) {
-    const value = responses[key];
+  // Get field labels from template
+  const fieldLabels = {};
+  const fieldTypes = {};
+  template.sections.forEach(section => {
+    section.fields.forEach(field => {
+      fieldLabels[field.id] = field.label;
+      fieldTypes[field.id] = field.type;
+    });
+  });
+  
+  // Build HTML for each section
+  template.sections.forEach(section => {
+    // Skip declaration section for now (handled separately with signature)
+    if (section.id === 'declaration') return;
     
-    // Skip signature objects for now (we'll handle them separately)
-    if (typeof value === 'object' && value && value.typedName) {
-      continue;
+    let sectionHtml = '<div class="section">';
+    sectionHtml += '<div class="section-title">' + section.title + '</div>';
+    
+    if (section.description) {
+      sectionHtml += '<div class="section-description">' + section.description + '</div>';
     }
     
-    html += '<div class="question-block">';
-    
-    // Question label
-    const labels = {
-      'q1': 'Technical Competence',
-      'q2': 'Communication Skills',
-      'q3': 'Would you rehire this person?',
-      'q4': 'Additional Comments'
-    };
-    html += '<div class="question-label">' + (labels[key] || key) + '</div>';
-    
-    // Answer
-    if (typeof value === 'number') {
-      const stars = '★'.repeat(value) + '☆'.repeat(5 - value);
-      html += '<div class="answer"><span class="rating-stars">' + stars + '</span> (' + value + '/5)</div>';
-    } else if (typeof value === 'boolean') {
-      html += '<div class="answer">' + (value ? '✓ Yes' : '✗ No') + '</div>';
+    // Render ratings in a compact grid
+    if (section.id === 'ratings') {
+      sectionHtml += '<div class="ratings-grid">';
+      section.fields.forEach(field => {
+        if (field.type === 'rating') {
+          const value = responses[field.id];
+          sectionHtml += '<div class="rating-item">';
+          sectionHtml += '<div class="rating-label">' + field.label + '</div>';
+          sectionHtml += '<div class="rating-value">' + (value || 'Not rated') + '</div>';
+          sectionHtml += '</div>';
+        } else if (field.type === 'textarea' && responses[field.id]) {
+          sectionHtml += '<div class="question-block" style="grid-column: 1 / -1;">';
+          sectionHtml += '<div class="question-label">' + field.label + '</div>';
+          sectionHtml += '<div class="answer">' + responses[field.id] + '</div>';
+          sectionHtml += '</div>';
+        }
+      });
+      sectionHtml += '</div>';
     } else {
-      html += '<div class="answer">' + (value || 'No response') + '</div>';
+      // Render other fields
+      section.fields.forEach(field => {
+        const value = responses[field.id];
+        
+        // Skip empty optional fields
+        if (value === undefined || value === null || value === '') {
+          if (!field.required) return;
+        }
+        
+        sectionHtml += '<div class="question-block">';
+        sectionHtml += '<div class="question-label">' + field.label + '</div>';
+        
+        if (field.type === 'boolean') {
+          const display = value === true || value === 'true' || value === 'Yes' ? '✓ Yes' : '✗ No';
+          const className = value === true || value === 'true' || value === 'Yes' ? 'answer-yes' : 'answer-no';
+          sectionHtml += '<div class="answer ' + className + '">' + display + '</div>';
+        } else if (field.type === 'date') {
+          const dateStr = value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not specified';
+          sectionHtml += '<div class="answer">' + dateStr + '</div>';
+        } else {
+          sectionHtml += '<div class="answer">' + (value || '-') + '</div>';
+        }
+        
+        sectionHtml += '</div>';
+      });
     }
     
-    html += '</div>';
-  }
+    sectionHtml += '</div>';
+    html += sectionHtml;
+  });
+  
+  // Build Declaration section with signature
+  html += buildDeclarationSection(responses);
+  
+  return html;
+}
+
+/**
+ * Build the declaration section with referee details and signature
+ */
+function buildDeclarationSection(responses) {
+  let html = '<div class="section declaration-section">';
+  html += '<div class="section-title">Declaration</div>';
+  html += '<div class="declaration-grid">';
+  
+  // Referee details
+  const declarationFields = [
+    { id: 'refereeName', label: 'Name' },
+    { id: 'refereePosition', label: 'Position' },
+    { id: 'refereeCompany', label: 'Company' },
+    { id: 'refereeTelephone', label: 'Telephone' },
+    { id: 'refereeEmailConfirm', label: 'Email' }
+  ];
+  
+  declarationFields.forEach(field => {
+    const value = responses[field.id];
+    if (value) {
+      html += '<div class="declaration-item">';
+      html += '<div class="info-label">' + field.label + '</div>';
+      html += '<div class="info-value">' + value + '</div>';
+      html += '</div>';
+    }
+  });
   
   html += '</div>';
   
@@ -1079,6 +1233,7 @@ function buildFormContent(responses) {
     }
   }
   
+  html += '</div>';
   return html;
 }
 
