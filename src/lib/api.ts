@@ -201,6 +201,22 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
 
             // Convert args to payload object
             const payload: Record<string, unknown> = { action: functionName };
+
+            // Inject Auth Credentials
+            const adminKey = import.meta.env.VITE_ADMIN_API_KEY;
+            const storedUser = localStorage.getItem('src_user');
+            if (adminKey) payload.adminKey = adminKey;
+            if (storedUser) {
+                try {
+                    const user = JSON.parse(storedUser);
+                    if (user && user.email) {
+                        payload.userEmail = user.email;
+                    }
+                } catch (e) {
+                    console.error('Failed to parse stored user for auth injection', e);
+                }
+            }
+
             if (args.length === 1 && typeof args[0] === 'object' && !Array.isArray(args[0])) {
                 Object.assign(payload, args[0]);
             } else if (args.length === 1 && typeof args[0] === 'string') {
@@ -233,6 +249,13 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
                 } else if (functionName === 'uploadReferenceDocument') {
                     // Payload is already an object with token, fileData, fileName, mimeType
                     Object.assign(payload, args[0]);
+                } else if (functionName === 'saveTemplate') {
+                    payload.name = args[0];
+                    payload.structure = args[1];
+                } else if (functionName === 'addStaff') {
+                    payload.name = args[0];
+                    payload.email = args[1];
+                    payload.role = args[2];
                 } else {
                     // For other functions with multiple args, map them to named parameters
                     payload.data = args;
@@ -241,23 +264,44 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
 
             console.log('[GAS Live] Payload:', JSON.stringify(payload, null, 2));
 
-            fetch(gasBaseUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'text/plain;charset=utf-8',
-                },
-                body: JSON.stringify(payload),
-                mode: 'cors',
-            })
-                .then(response => response.json())
-                .then(result => {
-                    console.log(`[GAS Live] Result for ${functionName}:`, result);
-                    resolve(result);
-                })
-                .catch(err => {
-                    console.error(`[GAS Live] Error for ${functionName}:`, err);
-                    reject(err);
-                });
+            // JSONP Implementation to bypass CORS/Auth issues
+            const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+            return new Promise((resolve, reject) => {
+                // Attach callback to window
+                (window as any)[callbackName] = (response: any) => {
+                    cleanup();
+                    if (response && response.success) {
+                        resolve(response);
+                    } else {
+                        console.error(`[GAS Live] Error for ${functionName}:`, response);
+                        reject(response?.error || 'Unknown error from GAS');
+                    }
+                };
+
+                // Construct URL with jsonPayload
+                const jsonPayload = JSON.stringify(payload);
+                const script = document.createElement('script');
+                // Use '?' if no query params yet, else '&' (gasBaseUrl usually ends with /exec)
+                const separator = gasBaseUrl.includes('?') ? '&' : '?';
+                script.src = `${gasBaseUrl}${separator}callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
+
+                script.onerror = (err) => {
+                    cleanup();
+                    console.error(`[GAS Live] Script load error for ${functionName}:`, err);
+                    reject('Failed to load GAS script (Network/CORS/Auth error). Ensure you are logged in if required.');
+                };
+
+                document.body.appendChild(script);
+
+                function cleanup() {
+                    // @ts-ignore
+                    delete window[callbackName];
+                    if (script.parentNode) {
+                        script.parentNode.removeChild(script);
+                    }
+                }
+            });
         } else {
             reject(new Error('GAS backend URL not configured. Set VITE_GAS_BASE_URL in .env'));
         }

@@ -136,11 +136,62 @@ function doPost(e) {
 }
 
 /**
+ * Security Helpers
+ */
+function isAdminRequest(e) {
+  let key = e.parameter.adminKey;
+  if (!key && e.postData && e.postData.contents) {
+    try {
+      const body = JSON.parse(e.postData.contents);
+      key = body.adminKey;
+    } catch (err) {}
+  }
+  // Also check jsonPayload for JSONP
+  if (!key && e.parameter.jsonPayload) {
+    try {
+      const body = JSON.parse(e.parameter.jsonPayload);
+      key = body.adminKey;
+    } catch (err) {}
+  }
+  
+  const storedKey = PropertiesService.getScriptProperties().getProperty('ADMIN_API_KEY');
+  return key && key === storedKey;
+}
+
+function getStaffFromRequest(e) {
+  let userEmail = e.parameter.userEmail;
+  if (!userEmail && e.postData && e.postData.contents) {
+    try {
+      const body = JSON.parse(e.postData.contents);
+      userEmail = body.userEmail;
+    } catch (err) {}
+  }
+  // Also check jsonPayload for JSONP
+  if (!userEmail && e.parameter.jsonPayload) {
+    try {
+      const body = JSON.parse(e.parameter.jsonPayload);
+      userEmail = body.userEmail;
+    } catch (err) {}
+  }
+  
+  if (!userEmail) return null;
+  return getStaffByEmail(userEmail);
+}
+
+function requireRole(staff, requiredRoles) {
+  if (!staff || !staff.active) {
+    throw new Error('Unauthorized: Invalid or inactive staff member');
+  }
+  if (!requiredRoles.includes(staff.role)) {
+    throw new Error(`Unauthorized: Requires role ${requiredRoles.join(' or ')}`);
+  }
+}
+
+/**
  * Main API Dispatcher
  */
 function handleApiRequest(e) {
   const lock = LockService.getScriptLock();
-  // Wait for up to 30 seconds for other processes to finish.
   lock.tryLock(30000);
 
   try {
@@ -148,43 +199,73 @@ function handleApiRequest(e) {
     let action = e.parameter.action;
     let payload = {};
     
-    // If POST, parse body
     if (e.postData && e.postData.contents) {
       try {
         const body = JSON.parse(e.postData.contents);
         if (body.action) action = body.action;
         payload = body;
       } catch (err) {
-        // Fallback if not JSON
         payload = e.parameter;
       }
     } else {
-      payload = e.parameter;
+      if (e.parameter.jsonPayload) {
+        try {
+          payload = JSON.parse(e.parameter.jsonPayload);
+          if (payload.action) action = payload.action;
+        } catch (err) {
+          console.error("Failed to parse jsonPayload: " + err);
+          payload = e.parameter;
+        }
+      } else {
+        payload = e.parameter;
+      }
+    }
+
+    // --- Endpoint Classification & Security ---
+    const publicEndpoints = [
+      'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
+      'submitReference', 'uploadReferenceDocument', 'getTemplates', 
+      'authorizeConsent', 'getDefaultTemplate', 'fixPermissions'
+    ];
+    
+    const adminOnlyEndpoints = [
+      'archiveRequests', 'unarchiveRequests', 'deleteRequests', 
+      'runSmartChase', 'runAnalysis', 'listStaff', 'addStaff', 
+      'updateStaff', 'deactivateStaff', 'saveTemplate', 
+      'initializeDatabase', 'sealRequest'
+    ];
+    
+    const staffEndpoints = [
+      'initiateRequest', 'getMyRequests', 'getRequest', 'getAuditTrail'
+    ];
+
+    const isPublic = publicEndpoints.includes(action);
+    const requiresAdmin = adminOnlyEndpoints.includes(action);
+    const requiresStaff = staffEndpoints.includes(action) || requiresAdmin;
+
+    let staff = null;
+
+    if (requiresStaff) {
+      if (!isAdminRequest(e)) {
+        throw new Error('Unauthorized: Missing or invalid admin key');
+      }
+
+      staff = getStaffFromRequest(e);
+      if (!staff) {
+        throw new Error('Unauthorized: Invalid or inactive staff member');
+      }
+
+      if (requiresAdmin) {
+        requireRole(staff, ['Admin']);
+      }
     }
 
     let result = {};
 
     switch (action) {
+      // Public
       case 'healthCheck':
         result = { success: true, service: 'Semester Reference Console', env: 'production', timestamp: new Date().toISOString() };
-        break;
-      case 'initializeDatabase':
-        result = initializeDatabase();
-        break;
-      case 'initiateRequest':
-        result = initiateRequest(payload);
-        break;
-      case 'getMyRequests':
-        result = getMyRequests(payload.includeArchived || false);
-        break;
-      case 'getRequest':
-        result = getRequest(payload.requestId);
-        break;
-      case 'getTemplates':
-        result = getTemplates();
-        break;
-      case 'saveTemplate':
-        result = saveTemplate(payload.name, payload.structure);
         break;
       case 'validateRefereeToken':
         result = validateRefereeToken(payload.token);
@@ -195,58 +276,138 @@ function handleApiRequest(e) {
       case 'authorizeConsent':
         result = processCandidateConsent(payload.token, payload.decision);
         break;
-      case 'getAuditTrail':
-        result = { success: true, data: getAuditTrail(payload.requestId) };
-        break;
-      case 'sealRequest':
-        result = sealRequest(payload.requestId);
-        break;
-      case 'runAnalysis':
-        result = analyzeReference(payload.requestId);
-        break;
-      case 'runSmartChase':
-        result = runSmartChase();
-        break;
       case 'uploadReferenceDocument':
         result = uploadReferenceDocument(payload);
         break;
-      case 'runE2ETest':
-        result = runCompleteE2ETest();
-        break;
-      case 'archiveRequests':
-        result = archiveRequests(payload.requestIds);
-        break;
-      case 'unarchiveRequests':
-        result = unarchiveRequests(payload.requestIds);
-        break;
-      case 'deleteRequests':
-        result = deleteRequests(payload.requestIds);
+      case 'getTemplates':
+        result = getTemplates();
         break;
       case 'getDefaultTemplate':
         result = { success: true, template: getDefaultTemplate() };
         break;
-      case 'getDebugTokens':
-        // Temporary for E2E audit
-        const auditEmail = payload.email;
-        if (auditEmail) {
-           result = { success: true, tokens: getLatestRequestTokens(auditEmail) };
-        } else {
-           result = { success: false, error: "Email required" };
-        }
+      case 'fixPermissions':
+        const id = ScriptApp.getScriptId();
+        const file = DriveApp.getFileById(id);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        result = { success: true, message: "Permissions updated to ANYONE_WITH_LINK" };
         break;
+
+      // Staff (Recruiter + Admin)
+      case 'initiateRequest':
+        result = initiateRequest(payload, staff);
+        break;
+      case 'getMyRequests':
+        result = getMyRequests(payload.includeArchived || false);
+        break;
+      case 'getRequest':
+        result = getRequest(payload.requestId);
+        break;
+      case 'getAuditTrail':
+        result = { success: true, data: getAuditTrail(payload.requestId) };
+        break;
+
+      // Admin Only
+      case 'initializeDatabase':
+        result = initializeDatabase();
+        break;
+      case 'saveTemplate':
+        result = saveTemplate(payload.name, payload.structure);
+        break;
+      case 'archiveRequests':
+        result = archiveRequests(payload.requestIds, staff);
+        break;
+      case 'unarchiveRequests':
+        result = unarchiveRequests(payload.requestIds, staff);
+        break;
+      case 'deleteRequests':
+        result = deleteRequests(payload.requestIds, staff);
+        break;
+      case 'runSmartChase':
+        result = runSmartChase(staff);
+        break;
+      case 'runAnalysis':
+        result = analyzeReference(payload.requestId, staff);
+        break;
+      case 'sealRequest':
+        result = sealRequest(payload.requestId, staff);
+        break;
+      
+      // Staff Management (Admin Only)
+      case 'listStaff':
+        result = listStaff();
+        break;
+      case 'addStaff':
+        result = addStaff(payload.name, payload.email, payload.role);
+        break;
+      case 'updateStaff':
+        result = updateStaff(payload.staffId, payload);
+        break;
+      case 'deactivateStaff':
+        result = deactivateStaff(payload.staffId);
+        break;
+
       default:
         result = { success: false, error: "Unknown action: " + action };
     }
 
-    return ContentService.createTextOutput(JSON.stringify(result))
-      .setMimeType(ContentService.MimeType.JSON);
+    // JSONP Support
+    const callback = e.parameter.callback;
+    if (callback) {
+      const json = JSON.stringify(result);
+      const script = `${callback}(${json})`;
+      return ContentService.createTextOutput(script).setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
 
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+    
   } catch (e) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, error: e.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+    const errorResult = { success: false, error: e.toString() };
+    const callback = e.parameter.callback;
+    if (callback) {
+      return ContentService.createTextOutput(`${callback}(${JSON.stringify(errorResult)})`).setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return ContentService.createTextOutput(JSON.stringify(errorResult)).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
   }
+}
+
+function testConsentLogic(token) {
+  const ss = getDatabaseSpreadsheet();
+  const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
+  const data = requestsSheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  const colConsentToken = headers.indexOf("ConsentToken");
+  const colStatus = headers.indexOf("Status");
+  const colConsentStatus = headers.indexOf("ConsentStatus");
+  
+  let log = [];
+  log.push("Headers found: " + JSON.stringify(headers));
+  log.push("Indices: Token=" + colConsentToken + ", Status=" + colStatus + ", ConsentStatus=" + colConsentStatus);
+  log.push("Searching for token: " + token);
+  
+  let found = false;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][colConsentToken]) === String(token)) {
+      found = true;
+      log.push("Found at row " + (i+1));
+      log.push("Row data: " + JSON.stringify(data[i]));
+      log.push("Status: " + data[i][colStatus]);
+      log.push("ConsentStatus: " + data[i][colConsentStatus]);
+      break;
+    }
+  }
+  
+  if (!found) {
+    log.push("Token NOT found in " + data.length + " rows");
+    // Log first 5 tokens to see format
+    for(let i=1; i<Math.min(data.length, 6); i++) {
+       log.push("Row " + (i+1) + " token: " + data[i][colConsentToken]);
+    }
+  }
+  
+  return { success: true, log: log };
 }
 
 // --- Database & Auditing ---
@@ -284,8 +445,15 @@ function initializeDatabase() {
     }
     // Add Archived column if missing
     if (!headers.includes('Archived')) {
-      const colIndex = headers.length + 1;
+      const colIndex = requestsSheet.getLastColumn() + 1;
       requestsSheet.getRange(1, colIndex).setValue('Archived');
+    }
+    // Add Staff tracking columns if missing
+    const updatedHeaders = requestsSheet.getRange(1, 1, 1, requestsSheet.getLastColumn()).getValues()[0];
+    if (!updatedHeaders.includes('CreatedByStaffId')) {
+      const colIndex = requestsSheet.getLastColumn() + 1;
+      requestsSheet.getRange(1, colIndex).setValue('CreatedByStaffId');
+      requestsSheet.getRange(1, colIndex + 1).setValue('LastUpdatedByStaffId');
     }
   }
   
@@ -293,11 +461,27 @@ function initializeDatabase() {
   let auditSheet = ss.getSheetByName(SHEET_AUDIT);
   if (!auditSheet) {
     auditSheet = ss.insertSheet(SHEET_AUDIT);
-    auditSheet.appendRow(['AuditID', 'RequestID', 'Timestamp', 'Actor', 'Action', 'Metadata']);
+    auditSheet.appendRow(['AuditID', 'RequestID', 'Timestamp', 'ActorType', 'ActorId', 'ActorName', 'Action', 'Metadata']);
     auditSheet.setFrozenRows(1);
+  } else {
+    // Check for new columns
+    const headers = auditSheet.getRange(1, 1, 1, auditSheet.getLastColumn()).getValues()[0];
+    if (!headers.includes('ActorType')) {
+      // This is a breaking schema change for Audit_Trail, but since it's just logs, we can append columns
+      // Ideally we'd migrate, but for now we'll just add them at the end if missing
+      // Or better, we can just update the header row if it's empty or compatible
+      // For simplicity in this audit, let's just add them if missing
+      const colIndex = auditSheet.getLastColumn() + 1;
+      auditSheet.getRange(1, colIndex).setValue('ActorType');
+      auditSheet.getRange(1, colIndex + 1).setValue('ActorId');
+      auditSheet.getRange(1, colIndex + 2).setValue('ActorName');
+    }
   }
 
-  // 3. Template_Definitions
+  // 3. Staff Sheet
+  initializeStaffSheet();
+
+  // 4. Template_Definitions
   let templatesSheet = ss.getSheetByName(SHEET_TEMPLATES);
   if (!templatesSheet) {
     templatesSheet = ss.insertSheet(SHEET_TEMPLATES);
@@ -362,21 +546,23 @@ function getDatabaseSpreadsheet() {
 /**
  * Log an audit event (Mandatory for compliance)
  */
-function logAudit(requestId, actor, action, metadata = {}) {
-  try {
-    const ss = getDatabaseSpreadsheet();
-    const auditSheet = ss.getSheetByName(SHEET_AUDIT);
-    
-    const auditId = Utilities.getUuid();
-    const timestamp = new Date();
-    const metadataStr = JSON.stringify(metadata);
-    
-    auditSheet.appendRow([
-      auditId, requestId, timestamp, actor, action, metadataStr
-    ]);
-  } catch (e) {
-    console.error("AUDIT FAILURE: " + e.toString());
-  }
+/**
+ * Log an event to the audit trail
+ */
+function logAudit(requestId, actorType, actorId, actorName, action, metadata = {}) {
+  const ss = getDatabaseSpreadsheet();
+  const auditSheet = ss.getSheetByName(SHEET_AUDIT);
+  
+  auditSheet.appendRow([
+    Utilities.getUuid(),
+    requestId,
+    new Date(),
+    actorType,
+    actorId || '',
+    actorName || '',
+    action,
+    JSON.stringify(metadata)
+  ]);
 }
 
 // --- Core Workflow: Initiation ---
@@ -384,7 +570,7 @@ function logAudit(requestId, actor, action, metadata = {}) {
 /**
  * Initiate a new reference request
  */
-function initiateRequest(requestData) {
+function initiateRequest(requestData, staff) {
   try {
     // 1. Validate Input
     if (!requestData.candidateName || !requestData.candidateEmail || !requestData.refereeName || !requestData.refereeEmail) {
@@ -399,9 +585,13 @@ function initiateRequest(requestData) {
     const consentToken = Utilities.getUuid();
     const now = new Date();
     const expiry = new Date(now.getTime() + (TOKEN_EXPIRY_HOURS * 60 * 60 * 1000));
-    const requesterEmail = Session.getActiveUser().getEmail();
+    
+    const requesterEmail = staff ? staff.email : (Session.getActiveUser().getEmail() || 'system');
+    const staffId = staff ? staff.staffId : '';
+    const staffName = staff ? staff.name : 'System';
     
     // 3. Create Record
+    // Schema: RequestID, CandidateName, CandidateEmail, RefereeName, RefereeEmail, RequesterEmail, Status, ConsentStatus, ConsentTimestamp, ConsentToken, ConsentTokenExpiry, RefereeToken, RefereeTokenExpiry, TemplateID, CreatedAt, UpdatedAt, Method, DeclineReason, DeclineDetails, PdfFileId, PdfUrl, UploadedFileUrl, FileName, LastChaseDate, Archived, CreatedByStaffId, LastUpdatedByStaffId
     const rowData = [
       requestId,
       requestData.candidateName,
@@ -419,13 +609,16 @@ function initiateRequest(requestData) {
       requestData.templateId || 'default',
       now,
       now,
-      '', '', '', '', '', '', '' // New fields empty
+      '', '', '', '', '', '', '', '', // Method...LastChaseDate (8 fields)
+      '', // Archived
+      staffId, // CreatedByStaffId
+      staffId  // LastUpdatedByStaffId
     ];
     
     requestsSheet.appendRow(rowData);
     
     // 4. Log Audit
-    logAudit(requestId, requesterEmail, 'REQUEST_INITIATED', { 
+    logAudit(requestId, 'Staff', staffId, staffName, 'REQUEST_INITIATED', { 
       candidate: requestData.candidateEmail,
       referee: requestData.refereeEmail 
     });
@@ -490,16 +683,38 @@ function sendAuthorizationEmail(email, name, token, refereeName) {
  */
 function processCandidateConsent(token, decision) {
   try {
+    console.log("Processing Consent. Token:", token, "Decision:", decision);
+    
     const ss = getDatabaseSpreadsheet();
     const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
     const data = requestsSheet.getDataRange().getValues();
+    const headers = data[0];
     
-    // Find request by token (Column index 9 is ConsentToken - 0-based)
+    // Dynamic Column Lookup
+    const colConsentToken = headers.indexOf("ConsentToken");
+    const colStatus = headers.indexOf("Status");
+    const colConsentStatus = headers.indexOf("ConsentStatus");
+    const colConsentTimestamp = headers.indexOf("ConsentTimestamp");
+    const colRefereeToken = headers.indexOf("RefereeToken");
+    const colRefereeTokenExpiry = headers.indexOf("RefereeTokenExpiry");
+    const colRequestId = headers.indexOf("RequestID");
+    const colCandidateName = headers.indexOf("CandidateName");
+    const colRefereeName = headers.indexOf("RefereeName");
+    const colRefereeEmail = headers.indexOf("RefereeEmail");
+    const colCandidateEmail = headers.indexOf("CandidateEmail");
+    const colConsentTokenExpiry = headers.indexOf("ConsentTokenExpiry");
+    
+    if (colConsentToken === -1 || colStatus === -1) {
+      console.error("Critical: Missing columns in Requests_Log");
+      return { success: false, error: "Database configuration error" };
+    }
+    
+    // Find request by token
     let rowIndex = -1;
     let request = null;
     
     for (let i = 1; i < data.length; i++) {
-      if (data[i][9] === token) {
+      if (String(data[i][colConsentToken]) === String(token)) {
         rowIndex = i;
         request = data[i];
         break;
@@ -507,47 +722,62 @@ function processCandidateConsent(token, decision) {
     }
     
     if (rowIndex === -1) {
+      console.warn("Token not found:", token);
       return { success: false, error: "Invalid token" };
     }
     
-    // Check Expiry (Column index 10)
-    const expiry = new Date(request[10]);
-    if (new Date() > expiry) {
-      requestsSheet.getRange(rowIndex + 1, 7).setValue('EXPIRED'); // Status column
-      return { success: false, error: "Token expired" };
+    console.log("Found Request:", request[colRequestId], "Current ConsentStatus:", request[colConsentStatus]);
+    
+    // Check Expiry
+    if (colConsentTokenExpiry !== -1 && request[colConsentTokenExpiry]) {
+      const expiry = new Date(request[colConsentTokenExpiry]);
+      if (new Date() > expiry) {
+        console.warn("Token expired for request:", request[colRequestId]);
+        requestsSheet.getRange(rowIndex + 1, colStatus + 1).setValue('EXPIRED'); 
+        return { success: false, error: "Token expired" };
+      }
     }
     
     // Check if already processed
-    if (request[7] !== 'PENDING') {
+    // Allow retry if status is PENDING or if it's just a re-click (idempotency could be better, but for now strict check)
+    // Actually, if it's already GRANTED, just return success to be idempotent
+    const currentStatus = request[colConsentStatus];
+    if (currentStatus === 'GRANTED' && decision === 'CONSENT_GIVEN') {
+       console.log("Consent already granted, returning success idempotently");
+       return { success: true };
+    }
+    
+    if (currentStatus !== 'PENDING' && currentStatus !== '') {
+       console.warn("Request already processed. Status:", currentStatus);
        return { success: false, error: "Request already processed" };
     }
     
-    const requestId = request[0];
+    const requestId = request[colRequestId];
     const now = new Date();
     
     // Update Record
     if (decision === 'CONSENT_GIVEN') {
-      requestsSheet.getRange(rowIndex + 1, 7).setValue('CONSENT_GIVEN'); // Status
-      requestsSheet.getRange(rowIndex + 1, 8).setValue('GRANTED'); // ConsentStatus
-      requestsSheet.getRange(rowIndex + 1, 9).setValue(now); // ConsentTimestamp (column 9, index 8)
+      requestsSheet.getRange(rowIndex + 1, colStatus + 1).setValue('CONSENT_GIVEN');
+      requestsSheet.getRange(rowIndex + 1, colConsentStatus + 1).setValue('GRANTED');
+      requestsSheet.getRange(rowIndex + 1, colConsentTimestamp + 1).setValue(now);
       
       // Generate Referee Token
       const refereeToken = Utilities.getUuid();
       const refExpiry = new Date(now.getTime() + (14 * 24 * 60 * 60 * 1000)); // 14 days
       
-      requestsSheet.getRange(rowIndex + 1, 12).setValue(refereeToken);
-      requestsSheet.getRange(rowIndex + 1, 13).setValue(refExpiry);
+      requestsSheet.getRange(rowIndex + 1, colRefereeToken + 1).setValue(refereeToken);
+      requestsSheet.getRange(rowIndex + 1, colRefereeTokenExpiry + 1).setValue(refExpiry);
       
       // Send Invite to Referee
-      sendRefereeInviteEmail(request[4], request[3], request[1], refereeToken);
+      sendRefereeInviteEmail(request[colRefereeEmail], request[colRefereeName], request[colCandidateName], refereeToken);
       
     } else {
-      requestsSheet.getRange(rowIndex + 1, 7).setValue('CONSENT_DECLINED');
-      requestsSheet.getRange(rowIndex + 1, 8).setValue('DECLINED');
-      requestsSheet.getRange(rowIndex + 1, 9).setValue(now);
+      requestsSheet.getRange(rowIndex + 1, colStatus + 1).setValue('CONSENT_DECLINED');
+      requestsSheet.getRange(rowIndex + 1, colConsentStatus + 1).setValue('DECLINED');
+      requestsSheet.getRange(rowIndex + 1, colConsentTimestamp + 1).setValue(now);
     }
     
-    logAudit(requestId, 'Candidate', decision, { token: '***' });
+    logAudit(requestId, 'Candidate', '', 'Candidate', decision, { token: '***' });
     
     return { success: true };
     
@@ -593,20 +823,27 @@ function sendRefereeInviteEmail(email, name, candidateName, token) {
  */
 function validateRefereeToken(token) {
   console.log(`[validateRefereeToken] Looking for token: "${token}"`);
-  console.log(`[validateRefereeToken] Token type: ${typeof token}, length: ${token ? token.length : 0}`);
   
   const ss = getDatabaseSpreadsheet();
   const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
   const data = requestsSheet.getDataRange().getValues();
+  const headers = data[0];
   
-  console.log(`[validateRefereeToken] Total rows (including header): ${data.length}`);
+  // Dynamic Column Lookup
+  const colRefereeToken = headers.indexOf("RefereeToken");
+  const colRefereeTokenExpiry = headers.indexOf("RefereeTokenExpiry");
+  const colStatus = headers.indexOf("Status");
+  const colTemplateId = headers.indexOf("TemplateID");
+  const colCandidateName = headers.indexOf("CandidateName");
+  
+  if (colRefereeToken === -1) {
+    console.error("Critical: RefereeToken column missing");
+    return { valid: false, error: "Database configuration error" };
+  }
   
   let request = null;
   for (let i = 1; i < data.length; i++) {
-    const sheetToken = data[i][11]; // RefereeToken column
-    console.log(`[validateRefereeToken] Row ${i}: sheetToken="${sheetToken}", type=${typeof sheetToken}, match=${sheetToken === token}`);
-    
-    if (sheetToken === token) { // RefereeToken column
+    if (String(data[i][colRefereeToken]) === String(token)) {
       console.log(`[validateRefereeToken] MATCH FOUND at row ${i}`);
       request = data[i];
       break;
@@ -614,35 +851,35 @@ function validateRefereeToken(token) {
   }
   
   if (!request) {
-    console.log(`[validateRefereeToken] No match found - returning Invalid token`);
+    console.log(`[validateRefereeToken] No match found for token: ${token}`);
     return { valid: false, error: "Invalid token" };
   }
   
-  console.log(`[validateRefereeToken] Token validated successfully`);
-  
   // Check Expiry
-  const expiry = new Date(request[12]);
-  if (new Date() > expiry) {
-    console.log(`[validateRefereeToken] Token expired`);
-    return { valid: false, error: "Token expired" };
+  if (colRefereeTokenExpiry !== -1 && request[colRefereeTokenExpiry]) {
+    const expiry = new Date(request[colRefereeTokenExpiry]);
+    if (new Date() > expiry) {
+      console.log(`[validateRefereeToken] Token expired`);
+      return { valid: false, error: "Token expired" };
+    }
   }
   
   // Check if already completed
-  if (['Completed', 'Declined', 'SEALED'].includes(request[6])) {
-     console.log(`[validateRefereeToken] Reference already submitted, status: ${request[6]}`);
+  const status = request[colStatus];
+  if (['Completed', 'Declined', 'SEALED'].includes(status)) {
+     console.log(`[validateRefereeToken] Reference already submitted, status: ${status}`);
      return { valid: false, error: "Reference already submitted" };
   }
   
   // Get Template
   const templatesResponse = getTemplates();
   const templates = templatesResponse.data || [];
-  const templateId = request[13];
+  const templateId = request[colTemplateId];
   const template = templates.find(t => t.templateId === templateId) || templates[0];
   
-  console.log(`[validateRefereeToken] Returning valid response`);
   return {
     valid: true,
-    candidateName: request[1],
+    candidateName: request[colCandidateName],
     template: template
   };
 }
@@ -680,13 +917,13 @@ function submitReference(token, responses, method, declineReason, declineDetails
       requestsSheet.getRange(rowIndex + 1, 17).setValue('decline'); // Method
       requestsSheet.getRange(rowIndex + 1, 18).setValue(declineReason);
       requestsSheet.getRange(rowIndex + 1, 19).setValue(declineDetails);
-      logAudit(requestId, 'Referee', 'REFERENCE_DECLINED', { reason: declineReason });
+      logAudit(requestId, 'Referee', '', 'Referee', 'REFERENCE_DECLINED', { reason: declineReason });
     } else if (method === 'upload') {
       requestsSheet.getRange(rowIndex + 1, 7).setValue('Completed');
       requestsSheet.getRange(rowIndex + 1, 17).setValue('upload'); // Method
       requestsSheet.getRange(rowIndex + 1, 22).setValue(uploadedFileUrl);
       requestsSheet.getRange(rowIndex + 1, 23).setValue(fileName);
-      logAudit(requestId, 'Referee', 'DOCUMENT_UPLOADED', { fileName: fileName });
+      logAudit(requestId, 'Referee', '', 'Referee', 'DOCUMENT_UPLOADED', { fileName: fileName });
     } else {
       // Form submission
       requestsSheet.getRange(rowIndex + 1, 7).setValue('Completed');
@@ -699,7 +936,7 @@ function submitReference(token, responses, method, declineReason, declineDetails
       // Let's create a Responses sheet on the fly.
       storeResponses(requestId, responses);
       
-      logAudit(requestId, 'Referee', 'REFERENCE_SUBMITTED', {});
+      logAudit(requestId, 'Referee', '', 'Referee', 'REFERENCE_SUBMITTED', {});
     }
     
     requestsSheet.getRange(rowIndex + 1, 16).setValue(now); // UpdatedAt
@@ -802,7 +1039,7 @@ function uploadReferenceDocument(payload) {
     requestsSheet.getRange(rowIndex + 1, 23).setValue(fileName); // FileName
     
     // Log audit event
-    logAudit(requestId, 'Referee', 'DOCUMENT_UPLOADED', { 
+    logAudit(requestId, 'Referee', '', 'Referee', 'DOCUMENT_UPLOADED', { 
       fileName: fileName,
       fileId: fileId,
       fileUrl: fileUrl
@@ -977,7 +1214,7 @@ function saveTemplate(name, structure) {
 
 // --- AI & Analysis ---
 
-function analyzeReference(requestId) {
+function analyzeReference(requestId, staff) {
   // Call the function in AI.gs
   // We need to expose it here or import it. 
   // Since they are in the same project, we can call it directly if it's global.
@@ -990,6 +1227,11 @@ function analyzeReference(requestId) {
   // If it's a decline or upload, AI might be limited
   if (request.responses.declineReason) {
     return { success: true, message: "Skipped AI for declined reference" };
+  }
+  
+  // Log manual trigger
+  if (staff) {
+    logAudit(requestId, 'Staff', staff.staffId, staff.name, 'AI_ANALYSIS_TRIGGERED', {});
   }
   
   // Call AI module
@@ -1006,7 +1248,10 @@ function analyzeReference(requestId) {
 /**
  * Generate PDF and seal the reference request
  */
-function sealRequest(requestId) {
+/**
+ * Generate PDF and seal the reference request
+ */
+function sealRequest(requestId, staff) {
   try {
     // Get request data
     const request = getRequest(requestId).data;
@@ -1034,7 +1279,10 @@ function sealRequest(requestId) {
       }
     }
     
-    logAudit(requestId, Session.getActiveUser().getEmail(), 'REFERENCE_SEALED', { 
+    const staffId = staff ? staff.staffId : '';
+    const staffName = staff ? staff.name : (Session.getActiveUser().getEmail() || 'System');
+    
+    logAudit(requestId, 'Staff', staffId, staffName, 'REFERENCE_SEALED', { 
       pdfUrl: pdfResult.pdfUrl,
       pdfFileId: pdfResult.pdfFileId
     });

@@ -252,7 +252,7 @@ function updateRequestAnalysis(requestId, analysis) {
 /**
  * Run smart chase automation (triggered by time-driven trigger)
  */
-function runSmartChase() {
+function runSmartChase(staff) {
   try {
     const ss = getDatabaseSpreadsheet();
     const requestsSheet = ss.getSheetByName('Requests_Log');
@@ -282,7 +282,7 @@ function runSmartChase() {
         const refereeEmail = data[i][4];
         const token = data[i][11]; // RefereeToken is column 12 (index 11)
         
-        sendSmartChaseEmail(refereeName, refereeEmail, token, requestId);
+        sendSmartChaseEmail(refereeName, refereeEmail, token, requestId, staff);
         
         // Update last chase date (Column 24)
         requestsSheet.getRange(i + 1, 24).setValue(now);
@@ -300,7 +300,7 @@ function runSmartChase() {
  * @param {string} token - Referee token
  * @param {string} requestId - Request ID
  */
-function sendSmartChaseEmail(refereeName, refereeEmail, token, requestId) {
+function sendSmartChaseEmail(refereeName, refereeEmail, token, requestId, staff) {
   const portalBaseUrl = PropertiesService.getScriptProperties().getProperty('PORTAL_BASE_URL') || ScriptApp.getService().getUrl();
   const formUrl = portalBaseUrl + '?view=portal&token=' + token;
   
@@ -322,5 +322,9 @@ function sendSmartChaseEmail(refereeName, refereeEmail, token, requestId) {
   
   GmailApp.sendEmail(refereeEmail, subject, '', { htmlBody: htmlBody });
   
-  logAudit(requestId, 'System', 'CHASE_EMAIL_SENT', { refereeEmail: refereeEmail });
+  const staffId = staff ? staff.staffId : '';
+  const staffName = staff ? staff.name : 'System';
+  const actorType = staff ? 'Staff' : 'System';
+  
+  logAudit(requestId, actorType, staffId, staffName, 'CHASE_EMAIL_SENT', { refereeEmail: refereeEmail });
 }

@@ -8,7 +8,7 @@
  * @param {string[]} requestIds - Array of request IDs to archive
  * @returns {Object} Result with success status and count
  */
-function archiveRequests(requestIds) {
+function archiveRequests(requestIds, staff) {
   if (!requestIds || !Array.isArray(requestIds) || requestIds.length === 0) {
     return { success: false, error: 'No request IDs provided' };
   }
@@ -37,7 +37,10 @@ function archiveRequests(requestIds) {
         archivedCount++;
         
         // Log to audit trail
-        logAudit(requestId, 'admin-dashboard', 'REQUEST_ARCHIVED', { 
+        const staffId = staff ? staff.staffId : '';
+        const staffName = staff ? staff.name : (Session.getActiveUser().getEmail() || 'System');
+        
+        logAudit(requestId, 'Staff', staffId, staffName, 'REQUEST_ARCHIVED', { 
           candidateName: data[i][COL_CANDIDATE_NAME],
           refereeName: data[i][COL_REFEREE_NAME]
         });
@@ -61,7 +64,7 @@ function archiveRequests(requestIds) {
  * @param {string[]} requestIds - Array of request IDs to unarchive
  * @returns {Object} Result with success status and count
  */
-function unarchiveRequests(requestIds) {
+function unarchiveRequests(requestIds, staff) {
   if (!requestIds || !Array.isArray(requestIds) || requestIds.length === 0) {
     return { success: false, error: 'No request IDs provided' };
   }
@@ -88,7 +91,11 @@ function unarchiveRequests(requestIds) {
         unarchivedCount++;
         
         // Log to audit trail
-        logAudit(requestId, 'admin-dashboard', 'REQUEST_UNARCHIVED', { 
+        // Log to audit trail
+        const staffId = staff ? staff.staffId : '';
+        const staffName = staff ? staff.name : (Session.getActiveUser().getEmail() || 'System');
+        
+        logAudit(requestId, 'Staff', staffId, staffName, 'REQUEST_UNARCHIVED', { 
           candidateName: data[i][COL_CANDIDATE_NAME],
           refereeName: data[i][COL_REFEREE_NAME]
         });
@@ -112,7 +119,7 @@ function unarchiveRequests(requestIds) {
  * @param {string[]} requestIds - Array of request IDs to delete
  * @returns {Object} Result with deleted and skipped counts
  */
-function deleteRequests(requestIds) {
+function deleteRequests(requestIds, staff) {
   if (!requestIds || !Array.isArray(requestIds) || requestIds.length === 0) {
     return { success: false, error: 'No request IDs provided' };
   }
@@ -181,7 +188,11 @@ function deleteRequests(requestIds) {
     
     for (const row of rowsToDelete) {
       // Log before deletion
-      logAudit(row.requestId, 'admin-dashboard', 'REQUEST_DELETED', row.rowData);
+      // Log before deletion
+      const staffId = staff ? staff.staffId : '';
+      const staffName = staff ? staff.name : (Session.getActiveUser().getEmail() || 'System');
+      
+      logAudit(row.requestId, 'Staff', staffId, staffName, 'REQUEST_DELETED', row.rowData);
       
       // Also delete from Responses sheet if exists
       deleteResponsesForRequest(row.requestId);
