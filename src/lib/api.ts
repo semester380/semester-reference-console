@@ -210,6 +210,13 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
                 } else {
                     payload.token = args[0];
                 }
+            } else if (args.length === 1 && Array.isArray(args[0])) {
+                // Array argument - for bulk action functions
+                if (functionName === 'archiveRequests' || functionName === 'unarchiveRequests' || functionName === 'deleteRequests') {
+                    payload.requestIds = args[0];
+                } else {
+                    payload.data = args[0];
+                }
             } else if (args.length > 1) {
                 if (functionName === 'submitReference') {
                     // Map arguments for submitReference: token, responses, method, declineReason, declineDetails, uploadedFileUrl, fileName

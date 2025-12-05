@@ -31,6 +31,7 @@ export interface Request {
         anomalies: string[];
         timestamp: string;
     };
+    archived?: boolean; // Archive flag for soft delete
 }
 
 // Signature response type for DocuSign-style signatures

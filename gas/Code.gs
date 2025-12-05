@@ -16,6 +16,15 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/
 const CHASE_INTERVAL_DAYS = 3;
 const MAX_CHASES_PER_DAY = 50;
 
+// Column indices for Requests_Log (0-indexed)
+const COL_REQUEST_ID = 0;
+const COL_CANDIDATE_NAME = 1;
+const COL_CANDIDATE_EMAIL = 2;
+const COL_REFEREE_NAME = 3;
+const COL_REFEREE_EMAIL = 4;
+const COL_STATUS = 6;
+const COL_ARCHIVED = 24; // New column for archive flag
+
 /**
  * Serves the React application via HtmlService OR handles JSON API requests
  */
@@ -89,7 +98,7 @@ function handleApiRequest(e) {
         result = initiateRequest(payload);
         break;
       case 'getMyRequests':
-        result = getMyRequests();
+        result = getMyRequests(payload.includeArchived || false);
         break;
       case 'getRequest':
         result = getRequest(payload.requestId);
@@ -126,6 +135,15 @@ function handleApiRequest(e) {
         break;
       case 'runE2ETest':
         result = runCompleteE2ETest();
+        break;
+      case 'archiveRequests':
+        result = archiveRequests(payload.requestIds);
+        break;
+      case 'unarchiveRequests':
+        result = unarchiveRequests(payload.requestIds);
+        break;
+      case 'deleteRequests':
+        result = deleteRequests(payload.requestIds);
         break;
       default:
         result = { success: false, error: "Unknown action: " + action };
@@ -174,6 +192,11 @@ function initializeDatabase() {
       requestsSheet.getRange(1, headers.length + 6).setValue('UploadedFileUrl');
       requestsSheet.getRange(1, headers.length + 7).setValue('FileName');
       requestsSheet.getRange(1, headers.length + 8).setValue('LastChaseDate');
+    }
+    // Add Archived column if missing
+    if (!headers.includes('Archived')) {
+      const colIndex = headers.length + 1;
+      requestsSheet.getRange(1, colIndex).setValue('Archived');
     }
   }
   
@@ -714,11 +737,15 @@ function uploadReferenceDocument(payload) {
 
 // --- Dashboard & Management ---
 
-function getMyRequests() {
+function getMyRequests(includeArchived = false) {
   const ss = getDatabaseSpreadsheet();
   const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
   const data = requestsSheet.getDataRange().getValues();
+  const headers = data[0];
   const userEmail = Session.getActiveUser().getEmail();
+  
+  // Find Archived column index dynamically
+  const archivedColIndex = headers.indexOf('Archived');
   
   // Fetch all AI results for efficient lookup
   const aiResults = getAllAIResults();
@@ -726,8 +753,13 @@ function getMyRequests() {
   const myRequests = [];
   // Skip header
   for (let i = 1; i < data.length; i++) {
-    // In a real app, filter by userEmail. For demo, show all.
-    // if (data[i][5] === userEmail) { ... }
+    // Check archived status
+    const isArchived = archivedColIndex !== -1 && data[i][archivedColIndex] === true;
+    
+    // Skip archived unless explicitly requested
+    if (isArchived && !includeArchived) {
+      continue;
+    }
     
     const requestId = data[i][0];
     
@@ -758,7 +790,8 @@ function getMyRequests() {
       refereeToken: data[i][11], // Exposed for testing
       createdAt: data[i][14],
       responses: responses,
-      aiAnalysis: aiResults[requestId] || null
+      aiAnalysis: aiResults[requestId] || null,
+      archived: isArchived
     });
   }
   
@@ -952,7 +985,7 @@ function generatePDF(requestId, request) {
     // Load template
     const templateHtml = HtmlService.createHtmlOutputFromFile('PdfTemplate').getContent();
     
-    // Replace placeholders
+    // Replace placeholders using simple {{name}} syntax
     const methodLabels = {
       'form': 'Online Form',
       'upload': 'Uploaded Document', 
@@ -960,20 +993,20 @@ function generatePDF(requestId, request) {
     };
     
     let html = templateHtml
-      .replace(/\<\?= candidateName \?\>/g, request.candidateName || '')
-      .replace(/\<\?= candidateEmail \?\>/g, request.candidateEmail || '')
-      .replace(/\<\?= refereeName \?\>/g, request.refereeName || '')
-      .replace(/\<\?= refereeEmail \?\>/g, request.refereeEmail || '')
-      .replace(/\<\?= requestId \?\>/g, requestId)
-      .replace(/\<\?= method \?\>/g, method)
-      .replace(/\<\?= methodLabel \?\>/g, methodLabels[method])
-      .replace(/\<\?= content \?\>/g, content)
-      .replace(/\<\?= generatedDate \?\>/g, new Date().toLocaleString('en-GB'));
+      .replace(/\{\{candidateName\}\}/g, request.candidateName || '')
+      .replace(/\{\{candidateEmail\}\}/g, request.candidateEmail || '')
+      .replace(/\{\{refereeName\}\}/g, request.refereeName || '')
+      .replace(/\{\{refereeEmail\}\}/g, request.refereeEmail || '')
+      .replace(/\{\{requestId\}\}/g, requestId)
+      .replace(/\{\{method\}\}/g, method)
+      .replace(/\{\{methodLabel\}\}/g, methodLabels[method])
+      .replace(/\{\{content\}\}/g, content)
+      .replace(/\{\{generatedDate\}\}/g, new Date().toLocaleString('en-GB'));
     
     // Create PDF blob
     const blob = Utilities.newBlob(html, 'text/html', 'reference.html')
       .getAs('application/pdf')
-      .setName(`Reference_${request.candidateName}_${requestId}.pdf`);
+      .setName('Reference_' + (request.candidateName || 'Unknown') + '_' + requestId + '.pdf');
     
     // Get or create PDF folder
     const folderName = "Semester References PDFs";

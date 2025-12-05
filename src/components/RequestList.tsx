@@ -8,6 +8,9 @@ interface RequestListProps {
     onViewRequest?: (request: Request) => void;
     statusFilter?: string;
     searchQuery?: string;
+    selectedIds?: Set<string>;
+    onSelectionChange?: (selectedIds: Set<string>) => void;
+    showArchived?: boolean;
 }
 
 export const RequestList: React.FC<RequestListProps> = ({
@@ -15,7 +18,10 @@ export const RequestList: React.FC<RequestListProps> = ({
     isLoading = false,
     onViewRequest,
     statusFilter = 'all',
-    searchQuery = ''
+    searchQuery = '',
+    selectedIds = new Set(),
+    onSelectionChange,
+    showArchived = false
 }) => {
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -30,8 +36,13 @@ export const RequestList: React.FC<RequestListProps> = ({
     // Filter and search requests
     let filteredRequests = requests;
 
+    // Apply archive filter
+    if (!showArchived) {
+        filteredRequests = filteredRequests.filter(req => !req.archived);
+    }
+
     // Apply status filter
-    if (statusFilter !== 'all') {
+    if (statusFilter !== 'all' && statusFilter !== 'archived') {
         filteredRequests = filteredRequests.filter(req => {
             switch (statusFilter) {
                 case 'pending':
@@ -44,6 +55,9 @@ export const RequestList: React.FC<RequestListProps> = ({
                     return true;
             }
         });
+    } else if (statusFilter === 'archived') {
+        // Show only archived
+        filteredRequests = filteredRequests.filter(req => req.archived);
     }
 
     // Apply search
@@ -88,7 +102,11 @@ export const RequestList: React.FC<RequestListProps> = ({
         );
     }
 
-    const getStatusBadge = (status: string) => {
+    const getStatusBadge = (status: string, archived?: boolean) => {
+        if (archived) {
+            return <Badge variant="default">Archived</Badge>;
+        }
+
         const statusMap: Record<string, { variant: 'success' | 'warning' | 'error' | 'info' | 'default'; label: string }> = {
             'PENDING_CONSENT': { variant: 'warning', label: 'Pending Consent' },
             'Pending_Consent': { variant: 'warning', label: 'Pending Consent' },
@@ -134,11 +152,51 @@ export const RequestList: React.FC<RequestListProps> = ({
         return `${window.location.origin}?view=portal&action=authorize&token=${token}`;
     };
 
+    // Selection handlers
+    const handleSelectAll = (checked: boolean) => {
+        if (onSelectionChange) {
+            if (checked) {
+                const allIds = new Set(filteredRequests.map(r => r.requestId));
+                onSelectionChange(allIds);
+            } else {
+                onSelectionChange(new Set());
+            }
+        }
+    };
+
+    const handleSelectRow = (requestId: string, checked: boolean) => {
+        if (onSelectionChange) {
+            const newSelection = new Set(selectedIds);
+            if (checked) {
+                newSelection.add(requestId);
+            } else {
+                newSelection.delete(requestId);
+            }
+            onSelectionChange(newSelection);
+        }
+    };
+
+    const allSelected = filteredRequests.length > 0 && filteredRequests.every(r => selectedIds.has(r.requestId));
+    const someSelected = filteredRequests.some(r => selectedIds.has(r.requestId));
+
     return (
         <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-nano-gray-200">
                 <thead className="bg-nano-gray-50">
                     <tr>
+                        {onSelectionChange && (
+                            <th className="px-4 py-3 text-left">
+                                <input
+                                    type="checkbox"
+                                    checked={allSelected}
+                                    ref={(el) => {
+                                        if (el) el.indeterminate = someSelected && !allSelected;
+                                    }}
+                                    onChange={(e) => handleSelectAll(e.target.checked)}
+                                    className="w-4 h-4 text-semester-blue border-nano-gray-300 rounded focus:ring-semester-blue"
+                                />
+                            </th>
+                        )}
                         <th className="px-6 py-3 text-left text-xs font-medium text-nano-gray-500 uppercase tracking-wider">
                             Candidate → Referee
                         </th>
@@ -155,15 +213,31 @@ export const RequestList: React.FC<RequestListProps> = ({
                 </thead>
                 <tbody className="bg-white divide-y divide-nano-gray-200">
                     {filteredRequests.map((req) => (
-                        <tr key={req.requestId} className="hover:bg-nano-gray-50 transition-colors">
+                        <tr
+                            key={req.requestId}
+                            className={`hover:bg-nano-gray-50 transition-colors ${req.archived ? 'opacity-60 bg-nano-gray-50' : ''
+                                } ${selectedIds.has(req.requestId) ? 'bg-semester-blue/5' : ''}`}
+                        >
+                            {onSelectionChange && (
+                                <td className="px-4 py-4">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedIds.has(req.requestId)}
+                                        onChange={(e) => handleSelectRow(req.requestId, e.target.checked)}
+                                        className="w-4 h-4 text-semester-blue border-nano-gray-300 rounded focus:ring-semester-blue"
+                                    />
+                                </td>
+                            )}
                             <td className="px-6 py-4">
-                                <div className="text-sm font-medium text-nano-gray-900">{req.candidateName}</div>
+                                <div className={`text-sm font-medium ${req.archived ? 'text-nano-gray-500' : 'text-nano-gray-900'}`}>
+                                    {req.candidateName}
+                                </div>
                                 <div className="text-xs text-nano-gray-500">{req.candidateEmail}</div>
                                 <div className="text-xs text-nano-gray-400 mt-1">→ {req.refereeName}</div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                                {getStatusBadge(req.status)}
-                                {req.anomalyFlag && (
+                                {getStatusBadge(req.status, req.archived)}
+                                {req.anomalyFlag && !req.archived && (
                                     <Badge variant="error" className="ml-2">⚠️ Flagged</Badge>
                                 )}
                             </td>
@@ -181,22 +255,26 @@ export const RequestList: React.FC<RequestListProps> = ({
                                             View
                                         </button>
                                     )}
-                                    <button
-                                        onClick={() => copyToClipboard(getMockRefereeLink(req), req.requestId, 'referee')}
-                                        data-referee-url={getMockRefereeLink(req)}
-                                        className="text-nano-gray-600 hover:text-semester-blue text-sm font-medium px-3 py-1.5 hover:bg-nano-gray-100 rounded transition-all"
-                                        title="Copy referee portal link"
-                                    >
-                                        {copiedId === `${req.requestId}-referee` ? '✓ Copied' : '🔗 Referee Link'}
-                                    </button>
-                                    <button
-                                        onClick={() => copyToClipboard(getMockCandidateLink(req), req.requestId, 'candidate')}
-                                        data-candidate-url={getMockCandidateLink(req)}
-                                        className="text-nano-gray-600 hover:text-semester-blue text-sm font-medium px-3 py-1.5 hover:bg-nano-gray-100 rounded transition-all"
-                                        title="Copy candidate consent link"
-                                    >
-                                        {copiedId === `${req.requestId}-candidate` ? '✓ Copied' : '📧 Consent Link'}
-                                    </button>
+                                    {!req.archived && (
+                                        <>
+                                            <button
+                                                onClick={() => copyToClipboard(getMockRefereeLink(req), req.requestId, 'referee')}
+                                                data-referee-url={getMockRefereeLink(req)}
+                                                className="text-nano-gray-600 hover:text-semester-blue text-sm font-medium px-3 py-1.5 hover:bg-nano-gray-100 rounded transition-all"
+                                                title="Copy referee portal link"
+                                            >
+                                                {copiedId === `${req.requestId}-referee` ? '✓ Copied' : '🔗 Referee Link'}
+                                            </button>
+                                            <button
+                                                onClick={() => copyToClipboard(getMockCandidateLink(req), req.requestId, 'candidate')}
+                                                data-candidate-url={getMockCandidateLink(req)}
+                                                className="text-nano-gray-600 hover:text-semester-blue text-sm font-medium px-3 py-1.5 hover:bg-nano-gray-100 rounded transition-all"
+                                                title="Copy candidate consent link"
+                                            >
+                                                {copiedId === `${req.requestId}-candidate` ? '✓ Copied' : '📧 Consent Link'}
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </td>
                         </tr>
