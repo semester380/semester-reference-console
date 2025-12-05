@@ -75,7 +75,7 @@ const Dashboard: React.FC = () => {
         setTimeout(() => setShowToast(false), 4000);
     };
 
-    const handleCreateRequest = async (formData: { candidateName: string; candidateEmail: string; refereeName: string; refereeEmail: string }) => {
+    const handleCreateRequest = async (formData: { candidateName: string; candidateEmail: string; refereeName: string; refereeEmail: string; templateId?: string }) => {
         // Optimistic Update
         const tempId = 'temp-' + Date.now();
         const newRequest: Request = {
@@ -97,8 +97,11 @@ const Dashboard: React.FC = () => {
 
         try {
             const result = await runGAS('initiateRequest', {
-                ...formData,
-                templateId: 'default'
+                candidateName: formData.candidateName,
+                candidateEmail: formData.candidateEmail,
+                refereeName: formData.refereeName,
+                refereeEmail: formData.refereeEmail,
+                templateId: formData.templateId || 'standard-social-care'
             }) as { success: boolean; requestId: string; error?: string };
 
             if (result.success) {
