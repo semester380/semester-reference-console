@@ -371,3 +371,101 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
         }
     });
 };
+
+/**
+ * Callback-based runner for GAS functions to bypass Promise resolution issues
+ */
+export const runGASCallback = (
+    functionName: string,
+    params: any,
+    onSuccess: (data: any) => void,
+    onError: (error: any) => void
+) => {
+    const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
+    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbxLfH_xrN0vYEKZYC7W-8OzDwHJ_8V8bAJvzGG3FJRDnAHrcM4XUWWasLPY176f7Hz5/exec';
+
+    if (useMocks) {
+        console.log(`[GAS Mock] Calling ${functionName} with:`, params);
+        if (mockGAS[functionName as keyof typeof mockGAS]) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (mockGAS[functionName as keyof typeof mockGAS] as any)(params)
+                .then(onSuccess)
+                .catch(onError);
+        } else {
+            console.warn(`[GAS Mock] Function ${functionName} not implemented`);
+            onSuccess({ success: true });
+        }
+        return;
+    }
+
+    if (!gasBaseUrl) {
+        onError(new Error('GAS backend URL not configured'));
+        return;
+    }
+
+    console.log(`[GAS Live Callback] Calling ${functionName} with:`, params);
+
+    const payload: any = { action: functionName };
+
+    // Inject Auth/Admin Key
+    const PUBLIC_ENDPOINTS = [
+        'healthCheck', 'processCandidateConsent', 'validateRefereeToken',
+        'submitReference', 'uploadReferenceDocument', 'getTemplates',
+        'authorizeConsent', 'getDefaultTemplate'
+    ];
+
+    if (!PUBLIC_ENDPOINTS.includes(functionName) || functionName === 'verifyStaff') {
+        payload.adminKey = import.meta.env.VITE_ADMIN_API_KEY;
+        const storedUser = localStorage.getItem('src_user');
+        if (storedUser) {
+            try {
+                const user = JSON.parse(storedUser);
+                if (user?.email) payload.userEmail = user.email;
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    // Merge params
+    if (params) {
+        // Handle different param types similar to runGAS if needed, 
+        // but typically params is just an object to merge
+        Object.assign(payload, params);
+    }
+
+    console.log('[GAS Live Callback] Payload:', JSON.stringify(payload, null, 2));
+
+    const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+    // Attach callback
+    (window as any)[callbackName] = (response: any) => {
+        console.log(`[GAS Live Callback] ${callbackName} EXECUTED`, response);
+        cleanup();
+
+        if (response && response.success) {
+            onSuccess(response);
+        } else {
+            console.error(`[GAS Live Callback] Error:`, response);
+            onError(response?.error || 'Unknown error');
+        }
+    };
+
+    // Construct URL
+    const jsonPayload = JSON.stringify(payload);
+    const script = document.createElement('script');
+    const separator = gasBaseUrl.includes('?') ? '&' : '?';
+    script.src = `${gasBaseUrl}${separator}callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
+
+    script.onerror = (err) => {
+        cleanup();
+        console.error(`[GAS Live Callback] Script load error:`, err);
+        onError('Failed to load GAS script');
+    };
+
+    document.body.appendChild(script);
+
+    function cleanup() {
+        // @ts-expect-error - dynamic delete
+        delete window[callbackName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+    }
+};
