@@ -84,7 +84,16 @@ const TemplateBuilder: React.FC = () => {
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            await runGAS('saveTemplate', templateName, fields);
+            // Pass selectedTemplateId if updating, or undefined/null if new
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const result = await runGAS('saveTemplate', templateName, fields, selectedTemplateId) as any;
+
+            // If result contains the ID (which it should), update our selection state 
+            // so subsequent saves update the same record instead of creating duplicates
+            if (result && result.templateId) {
+                setSelectedTemplateId(result.templateId);
+            }
+
             alert('Template saved successfully!');
             await loadTemplates(); // Refresh list
         } catch {
@@ -146,6 +155,26 @@ const TemplateBuilder: React.FC = () => {
                                 Preview
                             </button>
                         </div>
+                        {selectedTemplateId && (
+                            <Button
+                                variant="secondary"
+                                onClick={async () => {
+                                    if (window.confirm('Are you sure you want to delete this template? This cannot be undone.')) {
+                                        try {
+                                            await runGAS('deleteTemplate', selectedTemplateId);
+                                            alert('Template deleted');
+                                            handleNewTemplate();
+                                            await loadTemplates();
+                                        } catch (e) {
+                                            alert('Failed to delete template: ' + e);
+                                        }
+                                    }
+                                }}
+                                className="bg-white/10 text-white border-white/20 hover:bg-white/20"
+                            >
+                                Delete
+                            </Button>
+                        )}
                         <Button onClick={handleSave} disabled={isSaving}>
                             {isSaving ? 'Saving...' : 'Save Template'}
                         </Button>

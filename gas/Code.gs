@@ -232,9 +232,9 @@ function handleApiRequest(e) {
     const adminOnlyEndpoints = [
       'archiveRequests', 'unarchiveRequests', 'deleteRequests', 
       'runSmartChase', 'runAnalysis', 'listStaff', 'addStaff', 
-      'updateStaff', 'deactivateStaff', 'saveTemplate', 
+      'updateStaff', 'deactivateStaff', 'saveTemplate', 'deleteTemplate',
       'initializeDatabase', 'sealRequest', 'diagnoseConfig', 'fixPermissions',
-      'runCompleteE2ETest'
+      'runCompleteE2ETest', 'runQA'
     ];
     
     const staffEndpoints = [
@@ -324,7 +324,10 @@ function handleApiRequest(e) {
         result = initializeDatabase();
         break;
       case 'saveTemplate':
-        result = saveTemplate(payload.name, payload.structure);
+        result = saveTemplate(payload.templateName, payload.structureJSON, payload.templateId);
+        break;
+      case 'deleteTemplate':
+        result = deleteTemplate(payload.templateId);
         break;
       case 'archiveRequests':
         result = archiveRequests(payload.requestIds, staff);
@@ -1265,13 +1268,34 @@ function getTemplateById(templateId) {
   return null;
 }
 
-function saveTemplate(name, structure) {
+function saveTemplate(name, structure, templateId) {
   try {
     const ss = getDatabaseSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_TEMPLATES);
-    const templateId = Utilities.getUuid();
-    sheet.appendRow([templateId, name, JSON.stringify(structure), Session.getActiveUser().getEmail(), new Date()]);
-    return { success: true, templateId: templateId };
+    const data = sheet.getDataRange().getValues();
+    const user = Session.getActiveUser().getEmail();
+    const timestamp = new Date();
+    
+    // Check if updating existing
+    if (templateId) {
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][0] === templateId) {
+          // Update existing row
+          const rowIndex = i + 1;
+          sheet.getRange(rowIndex, 2).setValue(name);
+          sheet.getRange(rowIndex, 3).setValue(JSON.stringify(structure));
+          sheet.getRange(rowIndex, 4).setValue(user);
+          sheet.getRange(rowIndex, 5).setValue(timestamp);
+          return { success: true, templateId: templateId };
+        }
+      }
+    }
+    
+    // If not found or no ID, create new
+    const newId = templateId || Utilities.getUuid();
+    sheet.appendRow([newId, name, JSON.stringify(structure), user, timestamp]);
+    return { success: true, templateId: newId };
+    
   } catch (e) {
     return { success: false, error: e.toString() };
   }
@@ -1304,7 +1328,44 @@ function analyzeReference(requestId, staff) {
     const analysis = analyzeSentimentAndAnomalies(requestId, request.responses);
     return { success: true, analysis: analysis };
   } else {
-    return { success: false, error: "AI module not found" };
+  }
+}
+
+/**
+ * Delete a template
+ */
+function deleteTemplate(templateId) {
+  try {
+    if (!templateId) return { success: false, error: "Missing template ID" };
+    
+    // Prevent deleting default
+    if (templateId === DEFAULT_TEMPLATE.id) {
+       return { success: false, error: "Cannot delete the default system template" };
+    }
+
+    const ss = getDatabaseSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_TEMPLATES);
+    const data = sheet.getDataRange().getValues();
+    
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === templateId) {
+        rowIndex = i + 1; // 1-based index
+        break;
+      }
+    }
+    
+    if (rowIndex === -1) {
+      return { success: false, error: "Template not found" };
+    }
+    
+    sheet.deleteRow(rowIndex);
+    
+    return { success: true };
+    
+  } catch (e) {
+    console.error("deleteTemplate Error:", e);
+    return { success: false, error: e.toString() };
   }
 }
 
