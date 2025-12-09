@@ -5,7 +5,7 @@ import { RequestList } from '../components/RequestList';
 import { ReferenceViewer } from '../components/ReferenceViewer';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Logo } from '../components/Logo';
-import { runGAS } from '../lib/api';
+import { runGAS, runGASCallback } from '../lib/api';
 import type { Request } from '../types';
 
 const Dashboard: React.FC = () => {
@@ -27,22 +27,31 @@ const Dashboard: React.FC = () => {
     const [showArchived, setShowArchived] = useState(false);
     const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
 
-    const loadRequests = React.useCallback(async () => {
+    const loadRequests = React.useCallback(() => {
         setIsLoading(true);
-        try {
-            // Always fetch including archived to have complete data
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const response = await runGAS('getMyRequests', { includeArchived: true }) as any;
-            const data = response?.data || [];
-            setRequests(data);
-            calculateStats(data);
-            // Clear selection when data refreshes
-            setSelectedIds(new Set());
-        } catch (error) {
-            console.error('Failed to load requests:', error);
-        } finally {
-            setIsLoading(false);
-        }
+        console.log('[Dashboard] Loading requests via callback API...');
+
+        // Use callback-based API to bypass Promise resolution issues
+        runGASCallback(
+            'getMyRequests',
+            { includeArchived: true },
+            (response: any) => {
+                console.log('[Dashboard] Data received:', response);
+                const data = response?.data || [];
+                // Ensure state update happens in a new tick to be safe
+                setTimeout(() => {
+                    setRequests(data);
+                    calculateStats(data);
+                    setSelectedIds(new Set());
+                    setIsLoading(false);
+                    console.log(`[Dashboard] Set requests state with ${data.length} items`);
+                }, 0);
+            },
+            (error: any) => {
+                console.error('[Dashboard] Failed to load requests:', error);
+                setIsLoading(false);
+            }
+        );
     }, []);
 
     // Fetch requests on load
