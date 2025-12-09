@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Button, Input } from '../components/UI';
 import { DynamicForm } from '../components/DynamicForm';
 import { runGAS } from '../lib/api';
+import { Logo } from '../components/Logo';
 import type { TemplateField, Template } from '../types';
 
 const TemplateBuilder: React.FC = () => {
@@ -11,17 +12,42 @@ const TemplateBuilder: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'builder' | 'preview'>('builder');
     const [previewMode, setPreviewMode] = useState<'mobile' | 'desktop'>('mobile');
 
-    // Load default template on mount
-    useEffect(() => {
-        loadDefaultTemplate();
-    }, []);
+    const [templates, setTemplates] = useState<Template[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
-    const loadDefaultTemplate = async () => {
-        const templates = await runGAS('getTemplates') as Template[];
-        if (templates && templates.length > 0) {
-            setFields(templates[0].structureJSON);
-            setTemplateName(templates[0].name);
+    // Load templates on mount
+    const loadTemplates = useCallback(async () => {
+        try {
+            const result = await runGAS('getTemplates');
+            // Check if result is the array or the response wrapper
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const loadedTemplates = Array.isArray(result) ? result : (result as any).data || [];
+
+            setTemplates(loadedTemplates);
+
+            // If templates exist and none selected, load the first one (or most recent)
+            if (loadedTemplates.length > 0 && !selectedTemplateId) {
+                // selectTemplate(loadedTemplates[loadedTemplates.length - 1]); // Load latest
+            }
+        } catch (error) {
+            console.error("Failed to load templates", error);
         }
+    }, [selectedTemplateId]);
+
+    useEffect(() => {
+        loadTemplates();
+    }, [loadTemplates]);
+
+    const selectTemplate = (template: Template) => {
+        setTemplateName(template.name);
+        setFields(template.structureJSON);
+        setSelectedTemplateId(template.templateId);
+    };
+
+    const handleNewTemplate = () => {
+        setTemplateName('New Reference Template');
+        setFields([]);
+        setSelectedTemplateId('');
     };
 
     const addField = (type: TemplateField['type']) => {
@@ -60,6 +86,7 @@ const TemplateBuilder: React.FC = () => {
         try {
             await runGAS('saveTemplate', templateName, fields);
             alert('Template saved successfully!');
+            await loadTemplates(); // Refresh list
         } catch {
             alert('Failed to save template');
         } finally {
@@ -70,17 +97,35 @@ const TemplateBuilder: React.FC = () => {
     return (
         <div className="min-h-screen bg-nano-gray-50 flex flex-col">
             {/* Header */}
-            <header className="bg-white border-b border-nano-gray-200 sticky top-0 z-10">
+            <header className="bg-semester-blue border-b border-semester-blue-dark sticky top-0 z-10 shadow-md">
                 <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
                     <div>
-                        <h1 className="text-2xl font-semibold text-nano-gray-900">
+                        <Logo inverted={true} />
+                        <p className="text-sm text-blue-100 mt-1 pl-10">
                             Template Builder
-                        </h1>
-                        <p className="text-sm text-nano-gray-600 mt-1">
-                            Create and manage reference templates
                         </p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 items-center">
+                        <div className="mr-4">
+                            <select
+                                className="bg-white/10 border border-white/20 text-white text-sm rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-white/50 placeholder-white/50"
+                                style={{ colorScheme: 'dark' }}
+                                value={selectedTemplateId}
+                                onChange={(e) => {
+                                    const t = templates.find(t => t.templateId === e.target.value);
+                                    if (t) selectTemplate(t);
+                                    else handleNewTemplate();
+                                }}
+                            >
+                                <option value="" className="text-gray-900">+ Create New Template</option>
+                                <option disabled className="text-gray-900">──────────</option>
+                                {templates.map(t => (
+                                    <option key={t.templateId} value={t.templateId} className="text-gray-900">
+                                        {t.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                         <div className="flex bg-nano-gray-100 p-1 rounded-lg">
                             <button
                                 onClick={() => setActiveTab('builder')}

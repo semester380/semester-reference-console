@@ -154,6 +154,42 @@ function getStaffByEmail(email) {
 }
 
 /**
+ * Get staff member by ID
+ */
+function getStaffById(staffId) {
+  if (!staffId) return null;
+  
+  const ss = getDatabaseSpreadsheet();
+  const staffSheet = ss.getSheetByName(SHEET_STAFF);
+  
+  if (!staffSheet) return null;
+  
+  const data = staffSheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  // Dynamic column lookup
+  const colStaffId = headers.indexOf('StaffId');
+  const colName = headers.indexOf('Name');
+  const colEmail = headers.indexOf('Email');
+  const colRole = headers.indexOf('Role');
+  const colActive = headers.indexOf('Active');
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][colStaffId] === staffId) {
+      return {
+        staffId: data[i][colStaffId],
+        name: data[i][colName],
+        email: data[i][colEmail],
+        role: data[i][colRole],
+        active: data[i][colActive]
+      };
+    }
+  }
+  
+  return null;
+}
+
+/**
  * Verify staff access
  * Returns details if valid, null/error if not
  */

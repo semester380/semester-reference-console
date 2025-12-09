@@ -27,12 +27,25 @@
       margin-bottom: 20px;
       padding-bottom: 15px;
       border-bottom: 3px solid #0052CC;
+      /* Semester Blue */
     }
 
     .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo svg {
+      height: 32px;
+      width: 32px;
+    }
+
+    .logo-text {
       font-size: 24px;
       font-weight: bold;
-      color: #0052CC;
+      color: #111827;
+      letter-spacing: -0.5px;
     }
 
     .header-right {
@@ -308,7 +321,14 @@
 
 <body>
   <div class="header">
-    <div class="logo">Semester</div>
+    <div class="logo">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="16" cy="16" r="16" fill="#0052CC" />
+        <path d="M16 6C10.4772 6 6 10.4772 6 16C6 21.5228 10.4772 26 16 26V6Z" fill="#5E17EB" />
+        <circle cx="22" cy="10" r="3" fill="#FF0080" />
+      </svg>
+      <span class="logo-text">Semester</span>
+    </div>
     <div class="header-right">
       Official Reference Document<br>
       Request ID: {{requestId}}

@@ -241,18 +241,18 @@ const Dashboard: React.FC = () => {
             )}
 
             {/* Header */}
-            <header className="bg-white border-b border-nano-gray-200 sticky top-0 z-10">
+            <header className="bg-semester-blue border-b border-semester-blue-dark sticky top-0 z-10 shadow-md">
                 <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
                     <div className="flex items-center gap-4">
-                        <Logo />
-                        <div className="h-6 w-px bg-nano-gray-200 mx-2"></div>
-                        <span className="text-sm font-medium text-nano-gray-500">Reference Console</span>
+                        <Logo inverted={true} />
+                        <div className="h-6 w-px bg-semester-blue-light mx-2"></div>
+                        <span className="text-sm font-medium text-blue-100">Reference Console</span>
                     </div>
                     <div className="flex gap-3">
-                        <Button variant="secondary" onClick={() => window.location.href = '?view=builder'}>
+                        <Button variant="secondary" className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:border-white/40" onClick={() => window.location.href = '?view=builder'}>
                             Template Builder
                         </Button>
-                        <Button onClick={() => setIsModalOpen(true)} className="bg-semester-blue hover:bg-semester-blue-dark text-white">
+                        <Button onClick={() => setIsModalOpen(true)} className="bg-white text-semester-blue hover:bg-blue-50 font-semibold shadow-sm border-none">
                             + New Request
                         </Button>
                     </div>

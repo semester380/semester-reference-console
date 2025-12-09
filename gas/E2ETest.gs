@@ -12,9 +12,9 @@ function runCompleteE2ETest() {
     console.log('STEP 1: Creating new request...');
     const requestResult = initiateRequest({
       candidateName: 'E2E Test ' + new Date().getTime(),
-      candidateEmail: 'test@example.com',
+      candidateEmail: 'rob@semester.co.uk',
       refereeName: 'Test Referee',
-      refereeEmail: 'test@example.com',
+      refereeEmail: 'rob@semester.co.uk',
       templateId: 'default'
     });
     
@@ -110,14 +110,27 @@ function runCompleteE2ETest() {
       }
     }
     
-    return {
-      success: validationResult.valid,
-      requestId: requestId,
-      consentToken: consentToken,
-      refereeToken: refereeToken,
-      validationResult: validationResult
-    };
+    // Proceed to Step 6
+
+    // STEP 6: Submit Reference
+    console.log('\nSTEP 6: Submitting Reference (Form)...');
+    const submissionResult = submitReference(refereeToken, {
+      "suitableForRole": "5",
+      "refereeName": "Test Referee",
+      "refereeEmailConfirm": "rob@semester.co.uk"
+    }, 'form');
+
+    if (submissionResult.success) {
+       console.log('✅✅✅ Reference Submitted Successfully! Check email for completion notification.');
+    } else {
+       console.log('❌ Failed to submit reference:', submissionResult.error);
+    }
     
+    return {
+       success: true,
+       message: "Full E2E Test Completed incl. Submission"
+    };
+
   } catch (e) {
     console.log('\n❌ Exception:', e.toString());
     console.log('Stack:', e.stack);

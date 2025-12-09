@@ -301,6 +301,9 @@ function handleApiRequest(e) {
       case 'runCompleteE2ETest':
         result = runCompleteE2ETest();
         break;
+      case 'runQA':
+        result = runQA();
+        break;
 
       // Staff (Recruiter + Admin)
       case 'initiateRequest':
@@ -378,7 +381,7 @@ function handleApiRequest(e) {
         break;
 
       default:
-        result = { success: false, error: "Unknown action: " + action };
+        return createErrorResponse('Invalid action: ' + action);
     }
 
     // JSONP Support
@@ -661,50 +664,43 @@ function initiateRequest(requestData, staff) {
     
   } catch (e) {
     console.error("initiateRequest Error: " + e.toString());
-    sendErrorAlert('initiateRequest', e);
+    sendErrorAlert('initiateRequest', e); // Use the new central alert (which now exists)
     return { success: false, error: e.toString() };
   }
 }
+
 
 /**
  * Send authorization email to candidate
  */
 function sendAuthorizationEmail(email, name, token, refereeName) {
-  const webAppUrl = ScriptApp.getService().getUrl();
-  // In a real app, this would point to the React App URL with the token
-  // For now, we assume the React App is hosting the portal
-  // We'll use a placeholder URL that the user needs to configure
-  // Or if serving via GAS, use webAppUrl
-  
-  // Construct the URL to the React App (Portal)
-  // Use the configured PORTAL_BASE_URL or fallback to the Vercel app
   const portalBaseUrl = PropertiesService.getScriptProperties().getProperty('PORTAL_BASE_URL') || 'https://semester-reference-console-nmd4bhpey-robs-projects-ae895b9a.vercel.app/';
-  
-  // Ensure we don't double-slash
   const baseUrl = portalBaseUrl.endsWith('/') ? portalBaseUrl.slice(0, -1) : portalBaseUrl;
-  
-  // React App Route: /?view=portal&action=authorize&token=...
   const authUrl = `${baseUrl}/?view=portal&action=authorize&token=${token}`;
   
-  const subject = `Action Required: Authorize Reference Request for ${refereeName}`;
-  const htmlBody = `
-    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">
-      <h2 style="color: #111827; margin-bottom: 24px; font-weight: 600;">Reference Authorization Required</h2>
-      <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">Dear ${name},</p>
-      <p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
-        A reference request has been initiated for <strong>${refereeName}</strong>. 
-        In compliance with data protection regulations, we require your explicit consent before contacting this referee.
-      </p>
-      <div style="margin: 32px 0;">
-        <a href="${authUrl}" style="background-color: #0052CC; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; display: inline-block;">Authorize Request</a>
-      </div>
-      <p style="color: #6b7280; font-size: 14px; margin-top: 32px;">
-        If you did not expect this request, you can safely ignore this email or decline the request via the link above.
-      </p>
+  const subject = `Please approve your reference for ${refereeName}`;
+  
+  const content = `
+    <div style="text-align: center; margin-bottom: 30px;">
+       <h2 style="color: #111827; font-weight: 600; margin: 0;">Authorization Required</h2>
     </div>
+    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">Dear ${name},</p>
+    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
+      We are ready to request a reference from <strong>${refereeName}</strong> to support your application.
+    </p>
+    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
+      To comply with GDPR and keep you in control of your data, please confirm that you are happy for us to contact them.
+    </p>
+    <div style="margin: 32px 0; text-align: center;">
+      <a href="${authUrl}" style="background-color: #0052CC; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">Approve Reference Request</a>
+    </div>
+    <p style="color: #6b7280; font-size: 14px; margin-top: 32px; line-height: 1.5;">
+      This will immediately send an invitation to your referee.<br/>
+      If you did not expect this request, you can ignore this email or decline via the link.
+    </p>
   `;
   
-  GmailApp.sendEmail(email, subject, '', { htmlBody: htmlBody });
+  sendBrandedEmail(email, subject, content);
 }
 
 // --- Core Workflow: Authorization ---
@@ -819,32 +815,34 @@ function processCandidateConsent(token, decision) {
 }
 
 function sendRefereeInviteEmail(email, name, candidateName, token) {
-  const webAppUrl = ScriptApp.getService().getUrl();
   const portalBaseUrl = PropertiesService.getScriptProperties().getProperty('PORTAL_BASE_URL') || 'https://semester-reference-console-nmd4bhpey-robs-projects-ae895b9a.vercel.app/';
-  
-  // Ensure we don't double-slash
   const baseUrl = portalBaseUrl.endsWith('/') ? portalBaseUrl.slice(0, -1) : portalBaseUrl;
-  
   const inviteUrl = `${baseUrl}/?view=portal&token=${token}`;
   
-  const subject = `Reference Request for ${candidateName} - Semester`;
-  const htmlBody = `
-    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">
-      <h2 style="color: #111827; margin-bottom: 24px; font-weight: 600;">Reference Request</h2>
-      <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">Dear ${name},</p>
-      <p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
-        <strong>${candidateName}</strong> has nominated you as a referee. We would appreciate your feedback on their past performance.
-      </p>
-      <div style="margin: 32px 0;">
-        <a href="${inviteUrl}" style="background-color: #0052CC; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; display: inline-block;">Provide Reference</a>
-      </div>
-      <p style="color: #6b7280; font-size: 14px; margin-top: 32px;">
-        You can choose to complete a short online form, upload a document, or decline this request if you are unable to provide a reference.
-      </p>
+  const subject = `Reference request for ${candidateName} (takes ~2 minutes)`;
+  
+  const content = `
+    <div style="text-align: center; margin-bottom: 30px;">
+       <h2 style="color: #111827; font-weight: 600; margin: 0;">Reference Request</h2>
+    </div>
+    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">Dear ${name},</p>
+    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
+      <strong>${candidateName}</strong> has nominated you as a referee and we would really value your feedback.
+    </p>
+    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">
+      We know you’re busy, so we’ve made this as quick as possible:
+    </p>
+    <ul style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
+      <li><strong>Online form:</strong> mobile-friendly, usually takes about 2 minutes.</li>
+      <li><strong>Upload:</strong> or simply upload an existing reference letter.</li>
+      <li><strong>Decline:</strong> if you cannot provide a reference, please let us know via the link.</li>
+    </ul>
+    <div style="margin: 32px 0; text-align: center;">
+      <a href="${inviteUrl}" style="background-color: #0052CC; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">Provide Reference</a>
     </div>
   `;
   
-  GmailApp.sendEmail(email, subject, '', { htmlBody: htmlBody });
+  sendBrandedEmail(email, subject, content);
 }
 
 // --- Core Workflow: Referee Portal ---
@@ -949,12 +947,20 @@ function submitReference(token, responses, method, declineReason, declineDetails
       requestsSheet.getRange(rowIndex + 1, 18).setValue(declineReason);
       requestsSheet.getRange(rowIndex + 1, 19).setValue(declineDetails);
       logAudit(requestId, 'Referee', '', 'Referee', 'REFERENCE_DECLINED', { reason: declineReason });
+      
+      // Notify Staff
+      sendReferenceDeclinedNotification(requestId, declineReason);
+
     } else if (method === 'upload') {
       requestsSheet.getRange(rowIndex + 1, 7).setValue('Completed');
       requestsSheet.getRange(rowIndex + 1, 17).setValue('upload'); // Method
       requestsSheet.getRange(rowIndex + 1, 22).setValue(uploadedFileUrl);
       requestsSheet.getRange(rowIndex + 1, 23).setValue(fileName);
       logAudit(requestId, 'Referee', '', 'Referee', 'DOCUMENT_UPLOADED', { fileName: fileName });
+      
+      // Notify Staff
+      sendReferenceCompletedNotification(requestId, 'upload');
+
     } else {
       // Form submission
       requestsSheet.getRange(rowIndex + 1, 7).setValue('Completed');
@@ -968,6 +974,9 @@ function submitReference(token, responses, method, declineReason, declineDetails
       storeResponses(requestId, responses);
       
       logAudit(requestId, 'Referee', '', 'Referee', 'REFERENCE_SUBMITTED', {});
+      
+      // Notify Staff
+      sendReferenceCompletedNotification(requestId, 'form');
     }
     
     requestsSheet.getRange(rowIndex + 1, 16).setValue(now); // UpdatedAt
@@ -1231,6 +1240,31 @@ function getTemplates() {
   return { success: true, data: templates };
 }
 
+function getTemplateById(templateId) {
+  if (!templateId) return null;
+  const ss = getDatabaseSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_TEMPLATES);
+  const data = sheet.getDataRange().getValues();
+  
+  // Search for template
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === templateId) {
+       try {
+         return {
+           templateId: data[i][0],
+           name: data[i][1],
+           structureJSON: JSON.parse(data[i][2]),
+           active: true
+         };
+       } catch (e) {
+         console.error('Error parsing template JSON', e);
+         return null;
+       }
+    }
+  }
+  return null;
+}
+
 function saveTemplate(name, structure) {
   try {
     const ss = getDatabaseSpreadsheet();
@@ -1347,7 +1381,34 @@ function generatePDF(requestId, request) {
     } else if (method === 'upload') {
       content = buildUploadContent(responses);
     } else {
-      content = buildFormContent(responses);
+      // Fetch the specific template used for this request
+      // TemplateID is likely in column 15 (Index 14) of Requests_Log, but getRequest might not expose it easily 
+      // if it's not mapped. Let's just grab the template or default.
+      
+      let templateToUse = DEFAULT_TEMPLATE;
+      if (request.templateId) {
+         const tmpl = getTemplateById(request.templateId);
+         if (tmpl && tmpl.structureJSON) {
+            // Remap structureJSON (array of fields) to expected object format if needed
+            // DEFAULT_TEMPLATE is { sections: [...] }
+            // Dynamic form structure is Array<Field>.
+            // We need to confirm what buildFormContent expects.
+            // buildFormContent below expects `template.sections`.
+            // The saved templates are `Array<Field>`. We need to adapt.
+            templateToUse = { 
+               sections: [{
+                 id: "main",
+                 title: "Reference Questions",
+                 fields: tmpl.structureJSON
+               }]
+            };
+         }
+      } else {
+        // Fallback or "Default" template - check if DEFAULT_TEMPLATE is compatible
+        // DEFAULT_TEMPLATE in Code.gs is currently the JSON object structure.
+      }
+      
+      content = buildFormContent(responses, templateToUse);
     }
     
     // Load template
@@ -1398,12 +1459,207 @@ function generatePDF(requestId, request) {
     
   } catch (e) {
     Logger.log('generatePDF Error: ' + e.toString());
+    sendErrorAlert('generatePDF', e);
     return { success: false, error: 'PDF generation failed: ' + e.toString() };
   }
 }
 
-function buildFormContent(responses) {
-  const template = DEFAULT_TEMPLATE;
+// --- Email & Alert Helpers ---
+
+function sendBrandedEmail(recipient, subject, content) {
+  // SVG Logo (Basic shapes for email client compatibility - using images is better but SVG text works in some)
+  // For maximum compatibility in emails, we should use a public image URL if possible. 
+  // Since we don't have one, we will use a simple text header with brand colors and a 'Semester' label.
+  // Advanced: we could inline a base64 png, but Gmail blocks it often.
+  // Best approach: Clean minimal header.
+  
+  const htmlBody = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f3f4f6; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { background-color: #ffffff; padding: 24px 32px; border-bottom: 3px solid #0052CC; display: flex; align-items: center; gap: 10px; }
+        .logo-circle { width: 16px; height: 16px; background-color: #0052CC; border-radius: 50%; display: inline-block; }
+        .brand-name { font-size: 20px; font-weight: bold; color: #111827; display: inline-block; vertical-align: middle; margin-left: 8px; }
+        .content { padding: 40px 32px; color: #374151; font-size: 16px; line-height: 1.6; }
+        .footer { background-color: #f9fafb; padding: 32px; text-align: center; border-top: 1px solid #e5e7eb; }
+        .footer-text { font-size: 12px; color: #6b7280; line-height: 1.5; }
+        a.button { display: inline-block; background-color: #0052CC; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; }
+        a.button:hover { background-color: #5E17EB; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <span class="logo-circle"></span>
+          <span class="brand-name">Semester</span>
+        </div>
+        <div class="content">
+          ${content}
+        </div>
+        <div class="footer">
+          <p class="footer-text">
+            <strong>Semester Reference Console</strong><br/>
+            Secure, efficient reference management.<br/><br/>
+            &copy; ${new Date().getFullYear()} Semester Ltd.<br/>
+            <a href="https://semester.co.uk" style="color: #0052CC; text-decoration: none;">semester.co.uk</a>
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  GmailApp.sendEmail(recipient, subject, '', { htmlBody: htmlBody });
+}
+
+function sendErrorAlert(context, error) {
+
+  try {
+    const recipients = 'rob@semester.co.uk'; // Configurable
+    const subject = 'Semester Reference Console – Error Alert';
+    const htmlBody = `
+      <div style="font-family: monospace; padding: 20px; background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px;">
+        <h2 style="color: #991b1b; margin-top: 0;">System Error Detected</h2>
+        <p><strong>Context:</strong> ${context}</p>
+        <p><strong>Time:</strong> ${new Date().toISOString()}</p>
+        <div style="background-color: #ffffff; padding: 15px; border-radius: 4px; border: 1px solid #e5e7eb; margin-top: 15px;">
+           <strong>Error Details:</strong><br/>
+           <pre style="white-space: pre-wrap;">${error.toString()}</pre>
+           ${error.stack ? '<br/><strong>Stack:</strong><br/><pre style="white-space: pre-wrap;">' + error.stack + '</pre>' : ''}
+        </div>
+      </div>
+    `;
+    
+    GmailApp.sendEmail(recipients, subject, '', { htmlBody: htmlBody });
+    console.log("Error alert sent to " + recipients);
+    
+  } catch (alertError) {
+    console.error("Failed to send error alert: " + alertError.toString());
+  }
+}
+
+function sendReferenceCompletedNotification(requestId, method) {
+  try {
+     const request = getRequest(requestId).data;
+     if (!request) return;
+     
+     // Find staff member
+     let staffEmail = 'rob@semester.co.uk'; // Fallback
+     let staffName = 'Staff Member';
+     
+     // Try to get creator via StaffId in DB (needs lookup)
+     // Or use RequesterEmail column which might be stored if we added it (Column 5 "RequesterEmail" in initiatedRequest)
+     // Note: In initiateRequest we store RequesterEmail at index 5.
+     // Let's assume request object from getRequest has it.
+     // getRequest returns formatted object, but we might need to check how it maps.
+     // Looking at getMyRequests map: It doesn't seemingly expose requesterEmail.
+     
+     // Let's re-fetch the raw row or just use what we have.
+     // getRequest uses getMyRequests which maps specific columns.
+     // Let's fetch the raw data lightly or just rely on the stored ID.
+     
+     const ss = getDatabaseSpreadsheet();
+     const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
+     const data = requestsSheet.getDataRange().getValues();
+     let row = data.find(r => r[0] === requestId);
+     
+     if (row) {
+        const creatorId = row[25]; // CreatedByStaffId
+        const requesterEmail = row[5]; // RequesterEmail
+        
+        if (creatorId && typeof getStaffById === 'function') {
+           const staff = getStaffById(creatorId);
+           if (staff) {
+             staffEmail = staff.email;
+             staffName = staff.name.split(' ')[0];
+           }
+        } else if (requesterEmail) {
+           staffEmail = requesterEmail;
+        }
+     }
+     
+     const subject = `Reference received for ${request.candidateName} from ${request.refereeName}`;
+     const methodText = method === 'upload' ? 'uploaded a document' : 'completed the online form';
+     
+     const content = `
+       <p>Hi ${staffName},</p>
+       <p>Good news – <strong>${request.refereeName}</strong> has ${methodText} for <strong>${request.candidateName}</strong>.</p>
+       
+       <div style="margin: 25px 0;">
+         <a href="https://references.semester.co.uk" style="background-color: #059669; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Reference</a>
+       </div>
+       
+       <p style="font-size: 13px; color: #6b7280;">Login required to view full details.</p>
+     `;
+     
+     sendBrandedEmail(staffEmail, subject, content);
+
+     
+  } catch (e) {
+    console.error("Failed to send completion notification: " + e);
+    sendErrorAlert("sendReferenceCompletedNotification", e);
+  }
+}
+
+function sendReferenceDeclinedNotification(requestId, reason) {
+  try {
+     const request = getRequest(requestId).data;
+     if (!request) return;
+     
+     // Staff lookup (same logic)
+     let staffEmail = 'rob@semester.co.uk'; 
+     let staffName = 'Staff Member';
+     
+     const ss = getDatabaseSpreadsheet();
+     const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
+     const data = requestsSheet.getDataRange().getValues();
+     let row = data.find(r => r[0] === requestId);
+     
+     if (row) {
+        const creatorId = row[25];
+        const requesterEmail = row[5];
+        if (creatorId && typeof getStaffById === 'function') {
+           const staff = getStaffById(creatorId);
+           if (staff && staff.email) {
+             staffEmail = staff.email;
+             staffName = staff.name.split(' ')[0];
+           }
+        } else if (requesterEmail) {
+           staffEmail = requesterEmail;
+        }
+     }
+     
+     const subject = `Reference declined: ${request.refereeName} for ${request.candidateName}`;
+     const content = `
+       <p>Hi ${staffName},</p>
+       <p><strong>${request.refereeName}</strong> has declined to provide a reference for <strong>${request.candidateName}</strong>.</p>
+       
+       <div style="background-color: #f3f4f6; padding: 15px; border-left: 4px solid #ef4444; margin: 15px 0;">
+         <strong>Reason:</strong> ${reason || 'No reason provided'}
+       </div>
+       
+       <p>You may want to contact the candidate to request an alternative referee.</p>
+       
+       <div style="margin: 25px 0;">
+         <a href="https://references.semester.co.uk" style="background-color: #4b5563; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Request</a>
+       </div>
+     `;
+     
+     sendBrandedEmail(staffEmail, subject, content);
+
+     
+  } catch (e) {
+    console.error("Failed to send decline notification: " + e);
+   sendErrorAlert("sendReferenceDeclinedNotification", e);
+  }
+}
+
+
+function buildFormContent(responses, customTemplate) {
+  const template = customTemplate || DEFAULT_TEMPLATE;
   let html = '';
   
   // Get field labels from template

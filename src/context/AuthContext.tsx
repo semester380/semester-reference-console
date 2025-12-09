@@ -102,8 +102,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         userEmail: email
                     };
                     const script = document.createElement('script');
-                    // Hardcoded to v66 to ensure reliability (ignoring potentially stale Vercel envs)
-                    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbx9VeVu647WJ3dQCuHX-LYAM9bdOrPfTXRpMU0K30WaBl_LIytaF4Dk8cTIdmPO3rgV/exec';
+                    // Hardcoded to v85 to ensure reliability (ignoring potentially stale Vercel envs)
+                    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbxqb9PIc4s4ZgY6KtqxrzCK_79p2pP7WXQ_WYlE1xUOduU_VtJ60qdOPX0LDDpUwi6j/exec';
 
                     script.src = `${gasBaseUrl}?callback=${callbackId}&jsonPayload=${encodeURIComponent(JSON.stringify(payload))}`;
                     console.log('[Auth] Loading verifyStaff script with callback:', callbackId);

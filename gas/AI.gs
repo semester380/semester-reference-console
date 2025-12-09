@@ -278,11 +278,12 @@ function runSmartChase(staff) {
       
       if (daysSinceLastChase >= 3) {
         const requestId = data[i][0];
+        const candidateName = data[i][1];
         const refereeName = data[i][3];
         const refereeEmail = data[i][4];
         const token = data[i][11]; // RefereeToken is column 12 (index 11)
         
-        sendSmartChaseEmail(refereeName, refereeEmail, token, requestId, staff);
+        sendSmartChaseEmail(refereeName, refereeEmail, token, requestId, staff, candidateName);
         
         // Update last chase date (Column 24)
         requestsSheet.getRange(i + 1, 24).setValue(now);
@@ -299,28 +300,46 @@ function runSmartChase(staff) {
  * @param {string} refereeEmail - Referee email
  * @param {string} token - Referee token
  * @param {string} requestId - Request ID
+ * @param {Object} staff - Staff object
+ * @param {string} candidateName - Candidate name
  */
-function sendSmartChaseEmail(refereeName, refereeEmail, token, requestId, staff) {
+function sendSmartChaseEmail(refereeName, refereeEmail, token, requestId, staff, candidateName) {
   const portalBaseUrl = PropertiesService.getScriptProperties().getProperty('PORTAL_BASE_URL') || ScriptApp.getService().getUrl();
-  const formUrl = portalBaseUrl + '?view=portal&token=' + token;
+  // Ensure no double slash
+  const baseUrl = portalBaseUrl.endsWith('/') ? portalBaseUrl.slice(0, -1) : portalBaseUrl;
+  const formUrl = baseUrl + '?view=portal&token=' + token;
   
-  const subject = 'Reminder: Reference Request Pending - Semester';
-  const htmlBody = '<div style="font-family: \'Helvetica Neue\', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">' +
-    '<h2 style="color: #111827; margin-bottom: 24px; font-weight: 600;">Friendly Reminder</h2>' +
-    '<p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">Dear ' + refereeName + ',</p>' +
-    '<p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">We wanted to follow up on the reference request we sent you. Your input would be greatly valued and we would appreciate your feedback when you have a moment.</p>' +
-    '<p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">You have three convenient options:</p>' +
-    '<ul style="color: #4b5563; line-height: 1.8; margin-bottom: 24px; padding-left: 20px;">' +
-    '<li>Complete a short online form</li>' +
-    '<li>Upload your own reference document</li>' +
-    '<li>Decline if you\'re unable to provide a reference</li>' +
-    '</ul>' +
-    '<div style="margin: 32px 0;"><a href="' + formUrl + '" style="background-color: #0052CC; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; display: inline-block;">Provide Reference</a></div>' +
-    '<p style="color: #6b7280; font-size: 14px; margin-top: 32px;">Thank you for your time and support.</p>' +
-    '<p style="color: #6b7280; font-size: 14px; margin-top: 16px;">Best regards,<br/>The Semester Team</p>' +
-    '</div>';
+  const subject = 'Friendly reminder: reference request for ' + (candidateName || 'Candidate');
   
-  GmailApp.sendEmail(refereeEmail, subject, '', { htmlBody: htmlBody });
+  const content = `
+    <div style="text-align: center; margin-bottom: 30px;">
+       <h2 style="color: #111827; font-weight: 600; margin: 0;">Reference Reminder</h2>
+    </div>
+    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">Dear ${refereeName},</p>
+    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">We wanted to follow up on the reference request we sent you. If you have a spare moment, we would really appreciate your feedback.</p>
+    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">You have three convenient options:</p>
+    <ul style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
+    <li><strong>Complete a short online form</strong></li>
+    <li><strong>Upload your own reference document</strong></li>
+    <li><strong>Decline</strong> if you are unable to provide a reference</li>
+    </ul>
+    <div style="margin: 32px 0; text-align: center;">
+       <a href="${formUrl}" style="background-color: #0052CC; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">Provide Reference</a>
+    </div>
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;" />
+    <p style="color: #9ca3af; font-size: 13px; text-align: center;">Thank you again for your help.<br/>The Semester Team</p>
+  `;
+  
+  // Use global sendBrandedEmail if available
+  try {
+     if (typeof sendBrandedEmail === 'function') {
+        sendBrandedEmail(refereeEmail, subject, content);
+     } else {
+        GmailApp.sendEmail(refereeEmail, subject, '', { htmlBody: content });
+     }
+  } catch(e) {
+     console.error('Error sending smart chase: ' + e.toString());
+  }
   
   const staffId = staff ? staff.staffId : '';
   const staffName = staff ? staff.name : 'System';

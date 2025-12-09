@@ -196,8 +196,9 @@ const mockGAS = {
 export const runGAS = (functionName: string, ...args: unknown[]) => {
     return new Promise((resolve, reject) => {
         const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-        // Hardcoded URL to ensure Vercel uses the correct active deployment (v40+)
-        const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbx9VeVu647WJ3dQCuHX-LYAM9bdOrPfTXRpMU0K30WaBl_LIytaF4Dk8cTIdmPO3rgV/exec';
+        // Live GAS Deployment ID (v85 - Production Final Release)
+        const GAS_DEPLOYMENT_ID = 'AKfycbxqb9PIc4s4ZgY6KtqxrzCK_79p2pP7WXQ_WYlE1xUOduU_VtJ60qdOPX0LDDpUwi6j';
+        const gasBaseUrl = `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
 
         if (useMocks) {
             // Local development mock
@@ -386,7 +387,7 @@ export const runGASCallback = (
     onError: (error: any) => void
 ) => {
     const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbx9VeVu647WJ3dQCuHX-LYAM9bdOrPfTXRpMU0K30WaBl_LIytaF4Dk8cTIdmPO3rgV/exec';
+    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbxqb9PIc4s4ZgY6KtqxrzCK_79p2pP7WXQ_WYlE1xUOduU_VtJ60qdOPX0LDDpUwi6j/exec';
 
     if (useMocks) {
         console.log(`[GAS Mock] Calling ${functionName} with:`, params);
