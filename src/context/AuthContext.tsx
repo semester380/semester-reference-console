@@ -39,8 +39,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const login = useGoogleLogin({
         onSuccess: async (tokenResponse) => {
+            console.log('[Auth] Google login success, token received');
             try {
                 setIsLoading(true);
+                console.log('[Auth] Fetching user info from Google...');
                 // Fetch user info from Google
                 const userInfo = await axios.get(
                     'https://www.googleapis.com/oauth2/v3/userinfo',
@@ -48,18 +50,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 );
 
                 const { email, picture } = userInfo.data;
+                console.log('[Auth] User email from Google:', email);
 
                 // Verify domain
                 if (!email.endsWith('@semester.co.uk')) {
+                    console.warn('[Auth] Domain check failed:', email);
                     alert('Access restricted to @semester.co.uk accounts only.');
                     googleLogout();
                     setIsLoading(false);
                     return;
                 }
 
+                console.log('[Auth] Domain check passed, calling verifyStaff...');
                 // Verify against backend Staff sheet
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const result = await runGAS('verifyStaff', { userEmail: email }) as any;
+                console.log('[Auth] verifyStaff result:', result);
 
                 if (!result.success) {
                     console.error('Staff verification failed:', result.error);
@@ -76,11 +82,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     role: result.user.role
                 };
 
+                console.log('[Auth] Setting user data:', userData);
                 setUser(userData);
                 localStorage.setItem('src_user', JSON.stringify(userData));
+                console.log('[Auth] Login complete!');
             } catch (error) {
                 console.error('Login Failed:', error);
                 alert('Login failed. Please try again.');
+                googleLogout();
             } finally {
                 setIsLoading(false);
             }
