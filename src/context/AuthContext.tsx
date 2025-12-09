@@ -43,7 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsLoading(true);
 
             // Fetch user info from Google
-            return axios.get(
+            axios.get(
                 'https://www.googleapis.com/oauth2/v3/userinfo',
                 { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
             )
@@ -57,13 +57,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         alert('Access restricted to @semester.co.uk accounts only.');
                         googleLogout();
                         setIsLoading(false);
-                        return Promise.reject('Domain check failed');
+                        return;
                     }
 
                     console.log('[Auth] Domain check passed, calling verifyStaff...');
 
                     // Verify against backend Staff sheet
-                    return runGAS('verifyStaff', { userEmail: email })
+                    runGAS('verifyStaff', { userEmail: email })
                         .then((result: any) => {
                             alert('THEN HANDLER CALLED! result=' + JSON.stringify(result));
                             console.log('[Auth] verifyStaff SUCCESS, result:', result);
@@ -73,7 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                 alert(`Not Authorized: ${result?.error || 'You are not listed in the Staff database.'}`);
                                 googleLogout();
                                 setIsLoading(false);
-                                return Promise.reject(`Verification failed: ${result?.error || 'Not in Staff database.'}`);
+                                return;
                             }
 
                             const userData: User = {
@@ -88,6 +88,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             localStorage.setItem('src_user', JSON.stringify(userData));
                             setIsLoading(false);
                             console.log('[Auth] Login complete!');
+                        })
+                        .catch((error: any) => {
+                            console.error('[Auth] verifyStaff ERROR:', error);
+                            alert('Login failed: ' + error);
+                            googleLogout();
+                            setIsLoading(false);
                         });
                 })
                 .catch((error) => {
