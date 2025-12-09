@@ -63,13 +63,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 console.log('[Auth] Domain check passed, calling verifyStaff...');
                 // Verify against backend Staff sheet
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const result = await runGAS('verifyStaff', { userEmail: email }) as any;
-                console.log('[Auth] verifyStaff result:', result);
+                let result;
+                try {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    result = await runGAS('verifyStaff', { userEmail: email }) as any;
+                    console.log('[Auth] verifyStaff result:', result);
+                    console.log('[Auth] result type:', typeof result);
+                    console.log('[Auth] result.success:', result?.success);
+                    console.log('[Auth] result.user:', result?.user);
+                } catch (err) {
+                    console.error('[Auth] Error calling verifyStaff:', err);
+                    throw err;
+                }
 
-                if (!result.success) {
-                    console.error('Staff verification failed:', result.error);
-                    alert(`Not Authorized: ${result.error || 'You are not listed in the Staff database.'}`);
+                if (!result || !result.success) {
+                    console.error('Staff verification failed:', result?.error);
+                    alert(`Not Authorized: ${result?.error || 'You are not listed in the Staff database.'}`);
                     googleLogout();
                     setIsLoading(false);
                     return;
