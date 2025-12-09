@@ -62,46 +62,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
 
                 console.log('[Auth] Domain check passed, calling verifyStaff...');
-                // Verify against backend Staff sheet
-                let result;
-                try {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    result = await runGAS('verifyStaff', { userEmail: email }) as any;
-                    alert('DEBUG: Got result from verifyStaff: ' + JSON.stringify(result));
-                    console.log('[Auth] verifyStaff result:', result);
-                    console.log('[Auth] result type:', typeof result);
-                    console.log('[Auth] result.success:', result?.success);
-                    console.log('[Auth] result.user:', result?.user);
-                } catch (err) {
-                    alert('DEBUG: Error in verifyStaff: ' + err);
-                    console.error('[Auth] Error calling verifyStaff:', err);
-                    throw err;
-                }
 
-                if (!result || !result.success) {
-                    console.error('Staff verification failed:', result?.error);
-                    alert(`Not Authorized: ${result?.error || 'You are not listed in the Staff database.'}`);
-                    googleLogout();
-                    setIsLoading(false);
-                    return;
-                }
+                // Verify against backend Staff sheet - using .then() instead of await
+                runGAS('verifyStaff', { userEmail: email })
+                    .then((result: any) => {
+                        console.log('[Auth] verifyStaff SUCCESS, result:', result);
 
-                const userData: User = {
-                    email: result.user.email,
-                    name: result.user.name,
-                    picture,
-                    role: result.user.role
-                };
+                        if (!result || !result.success) {
+                            console.error('[Auth] Verification failed:', result?.error);
+                            alert(`Not Authorized: ${result?.error || 'You are not listed in the Staff database.'}`);
+                            googleLogout();
+                            setIsLoading(false);
+                            return;
+                        }
 
-                console.log('[Auth] Setting user data:', userData);
-                setUser(userData);
-                localStorage.setItem('src_user', JSON.stringify(userData));
-                console.log('[Auth] Login complete!');
+                        const userData: User = {
+                            email: result.user.email,
+                            name: result.user.name,
+                            picture,
+                            role: result.user.role
+                        };
+
+                        console.log('[Auth] Setting user data:', userData);
+                        setUser(userData);
+                        localStorage.setItem('src_user', JSON.stringify(userData));
+                        setIsLoading(false);
+                        console.log('[Auth] Login complete!');
+                    })
+                    .catch((error: any) => {
+                        console.error('[Auth] verifyStaff ERROR:', error);
+                        alert('Login failed: ' + error);
+                        googleLogout();
+                        setIsLoading(false);
+                    });
             } catch (error) {
                 console.error('Login Failed:', error);
                 alert('Login failed. Please try again.');
                 googleLogout();
-            } finally {
                 setIsLoading(false);
             }
         },
