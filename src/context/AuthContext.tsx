@@ -62,39 +62,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                     console.log('[Auth] Domain check passed, calling verifyStaff...');
 
-                    // Verify against backend Staff sheet
-                    runGAS('verifyStaff', { userEmail: email })
-                        .then((result: any) => {
-                            alert('THEN HANDLER CALLED! result=' + JSON.stringify(result));
-                            console.log('[Auth] verifyStaff SUCCESS, result:', result);
+                    // Register global callback for verifyStaff response
+                    const callbackId = `verifyStaffCallback_${Date.now()}`;
+                    (window as any)[callbackId] = (response: any) => {
+                        console.log('[Auth] GLOBAL CALLBACK EXECUTED!', response);
 
-                            if (!result || !result.success) {
-                                console.error('[Auth] Verification failed:', result?.error);
-                                alert(`Not Authorized: ${result?.error || 'You are not listed in the Staff database.'}`);
-                                googleLogout();
-                                setIsLoading(false);
-                                return;
-                            }
+                        // Clean up
+                        delete (window as any)[callbackId];
 
-                            const userData: User = {
-                                email: result.user.email,
-                                name: result.user.name,
-                                picture,
-                                role: result.user.role
-                            };
-
-                            console.log('[Auth] Setting user data:', userData);
-                            setUser(userData);
-                            localStorage.setItem('src_user', JSON.stringify(userData));
-                            setIsLoading(false);
-                            console.log('[Auth] Login complete!');
-                        })
-                        .catch((error: any) => {
-                            console.error('[Auth] verifyStaff ERROR:', error);
-                            alert('Login failed: ' + error);
+                        if (!response || !response.success) {
+                            console.error('[Auth] Verification failed:', response?.error);
+                            alert(`Not Authorized: ${response?.error || 'You are not listed in the Staff database.'}`);
                             googleLogout();
                             setIsLoading(false);
-                        });
+                            return;
+                        }
+
+                        const userData: User = {
+                            email: response.user.email,
+                            name: response.user.name,
+                            picture,
+                            role: response.user.role
+                        };
+
+                        console.log('[Auth] Setting user data:', userData);
+                        setUser(userData);
+                        localStorage.setItem('src_user', JSON.stringify(userData));
+                        setIsLoading(false);
+                        console.log('[Auth] Login complete!');
+                    };
+
+                    // Make JSONP request
+                    const payload = {
+                        action: 'verifyStaff',
+                        adminKey: import.meta.env.VITE_ADMIN_API_KEY,
+                        userEmail: email
+                    };
+                    const script = document.createElement('script');
+                    const gasUrl = 'https://script.google.com/macros/s/AKfycbxLfH_xrN0vYEKZYC7W-8OzDwHJ_8V8bAJvzGG3FJRDnAHrcM4XUWWasLPY176f7Hz5/exec';
+                    script.src = `${gasUrl}?callback=${callbackId}&jsonPayload=${encodeURIComponent(JSON.stringify(payload))}`;
+                    console.log('[Auth] Loading verifyStaff script with callback:', callbackId);
+                    document.body.appendChild(script);
                 })
                 .catch((error) => {
                     console.error('[Auth] Error in login flow:', error);
