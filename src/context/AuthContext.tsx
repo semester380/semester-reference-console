@@ -38,69 +38,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const login = useGoogleLogin({
-        onSuccess: async (tokenResponse) => {
+        onSuccess: (tokenResponse) => {
             console.log('[Auth] Google login success, token received');
-            try {
-                setIsLoading(true);
-                console.log('[Auth] Fetching user info from Google...');
-                // Fetch user info from Google
-                const userInfo = await axios.get(
-                    'https://www.googleapis.com/oauth2/v3/userinfo',
-                    { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
-                );
+            setIsLoading(true);
 
-                const { email, picture } = userInfo.data;
-                console.log('[Auth] User email from Google:', email);
+            // Fetch user info from Google
+            axios.get(
+                'https://www.googleapis.com/oauth2/v3/userinfo',
+                { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
+            )
+                .then((userInfo) => {
+                    const { email, picture } = userInfo.data;
+                    console.log('[Auth] User email from Google:', email);
 
-                // Verify domain
-                if (!email.endsWith('@semester.co.uk')) {
-                    console.warn('[Auth] Domain check failed:', email);
-                    alert('Access restricted to @semester.co.uk accounts only.');
-                    googleLogout();
-                    setIsLoading(false);
-                    return;
-                }
-
-                console.log('[Auth] Domain check passed, calling verifyStaff...');
-
-                // Verify against backend Staff sheet - using .then() instead of await
-                runGAS('verifyStaff', { userEmail: email })
-                    .then((result: any) => {
-                        console.log('[Auth] verifyStaff SUCCESS, result:', result);
-
-                        if (!result || !result.success) {
-                            console.error('[Auth] Verification failed:', result?.error);
-                            alert(`Not Authorized: ${result?.error || 'You are not listed in the Staff database.'}`);
-                            googleLogout();
-                            setIsLoading(false);
-                            return;
-                        }
-
-                        const userData: User = {
-                            email: result.user.email,
-                            name: result.user.name,
-                            picture,
-                            role: result.user.role
-                        };
-
-                        console.log('[Auth] Setting user data:', userData);
-                        setUser(userData);
-                        localStorage.setItem('src_user', JSON.stringify(userData));
-                        setIsLoading(false);
-                        console.log('[Auth] Login complete!');
-                    })
-                    .catch((error: any) => {
-                        console.error('[Auth] verifyStaff ERROR:', error);
-                        alert('Login failed: ' + error);
+                    // Verify domain
+                    if (!email.endsWith('@semester.co.uk')) {
+                        console.warn('[Auth] Domain check failed:', email);
+                        alert('Access restricted to @semester.co.uk accounts only.');
                         googleLogout();
                         setIsLoading(false);
-                    });
-            } catch (error) {
-                console.error('Login Failed:', error);
-                alert('Login failed. Please try again.');
-                googleLogout();
-                setIsLoading(false);
-            }
+                        return Promise.reject('Domain check failed');
+                    }
+
+                    console.log('[Auth] Domain check passed, calling verifyStaff...');
+
+                    // Verify against backend Staff sheet
+                    return runGAS('verifyStaff', { userEmail: email })
+                        .then((result: any) => {
+                            console.log('[Auth] verifyStaff SUCCESS, result:', result);
+
+                            if (!result || !result.success) {
+                                console.error('[Auth] Verification failed:', result?.error);
+                                alert(`Not Authorized: ${result?.error || 'You are not listed in the Staff database.'}`);
+                                googleLogout();
+                                setIsLoading(false);
+                                return Promise.reject(`Verification failed: ${result?.error || 'Not in Staff database.'}`);
+                            }
+
+                            const userData: User = {
+                                email: result.user.email,
+                                name: result.user.name,
+                                picture,
+                                role: result.user.role
+                            };
+
+                            console.log('[Auth] Setting user data:', userData);
+                            setUser(userData);
+                            localStorage.setItem('src_user', JSON.stringify(userData));
+                            setIsLoading(false);
+                            console.log('[Auth] Login complete!');
+                        });
+                })
+                .catch((error) => {
+                    console.error('[Auth] Error in login flow:', error);
+                    alert('Login failed. Please try again.');
+                    googleLogout();
+                    setIsLoading(false);
+                });
         },
         onError: (error) => {
             console.error('Login Failed:', error);
