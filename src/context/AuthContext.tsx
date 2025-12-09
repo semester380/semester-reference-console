@@ -67,11 +67,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 try {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     result = await runGAS('verifyStaff', { userEmail: email }) as any;
+                    alert('DEBUG: Got result from verifyStaff: ' + JSON.stringify(result));
                     console.log('[Auth] verifyStaff result:', result);
                     console.log('[Auth] result type:', typeof result);
                     console.log('[Auth] result.success:', result?.success);
                     console.log('[Auth] result.user:', result?.user);
                 } catch (err) {
+                    alert('DEBUG: Error in verifyStaff: ' + err);
                     console.error('[Auth] Error calling verifyStaff:', err);
                     throw err;
                 }
