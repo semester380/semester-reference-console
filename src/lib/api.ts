@@ -173,6 +173,20 @@ const mockGAS = {
                 });
             }, 1500);
         });
+    },
+    verifyStaff: (email: string) => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                if (email?.endsWith('@semester.co.uk')) {
+                    resolve({
+                        success: true,
+                        user: { name: 'Mock User', email, role: 'Admin' }
+                    });
+                } else {
+                    resolve({ success: false, error: 'User not found in mock DB' });
+                }
+            }, 500);
+        });
     }
 };
 
@@ -203,17 +217,39 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
             const payload: Record<string, unknown> = { action: functionName };
 
             // Inject Auth Credentials
-            const adminKey = import.meta.env.VITE_ADMIN_API_KEY;
-            const storedUser = localStorage.getItem('src_user');
-            if (adminKey) payload.adminKey = adminKey;
-            if (storedUser) {
-                try {
-                    const user = JSON.parse(storedUser);
-                    if (user && user.email) {
-                        payload.userEmail = user.email;
+            // Inject Auth Credentials (SKIP for public endpoints)
+            const PUBLIC_ENDPOINTS = [
+                'healthCheck',
+                'processCandidateConsent',
+                'validateRefereeToken',
+                'submitReference',
+                'uploadReferenceDocument',
+                'getTemplates',
+                'authorizeConsent',
+                'getDefaultTemplate'
+            ];
+
+            const requiresAuth = !PUBLIC_ENDPOINTS.includes(functionName);
+
+            // Special case: verifyStaff is public (pre-auth) but requires adminKey
+            const requiresAdminKey = requiresAuth || functionName === 'verifyStaff';
+
+            if (requiresAdminKey) {
+                const adminKey = import.meta.env.VITE_ADMIN_API_KEY;
+                if (adminKey) payload.adminKey = adminKey;
+            }
+
+            if (requiresAuth) {
+                const storedUser = localStorage.getItem('src_user');
+                if (storedUser) {
+                    try {
+                        const user = JSON.parse(storedUser);
+                        if (user && user.email) {
+                            payload.userEmail = user.email;
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse stored user for auth injection', e);
                     }
-                } catch (e) {
-                    console.error('Failed to parse stored user for auth injection', e);
                 }
             }
 
@@ -269,6 +305,7 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
 
             return new Promise((resolve, reject) => {
                 // Attach callback to window
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (window as any)[callbackName] = (response: any) => {
                     cleanup();
                     if (response && response.success) {
@@ -295,7 +332,7 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
                 document.body.appendChild(script);
 
                 function cleanup() {
-                    // @ts-ignore
+                    // @ts-expect-error - cleanup dynamic global
                     delete window[callbackName];
                     if (script.parentNode) {
                         script.parentNode.removeChild(script);

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { googleLogout, useGoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
+import { runGAS } from '../lib/api';
 
 interface User {
     email: string;
@@ -29,7 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (storedUser) {
             try {
                 setUser(JSON.parse(storedUser));
-            } catch (e) {
+            } catch {
                 localStorage.removeItem('src_user');
             }
         }
@@ -46,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
                 );
 
-                const { email, name, picture } = userInfo.data;
+                const { email, picture } = userInfo.data;
 
                 // Verify domain
                 if (!email.endsWith('@semester.co.uk')) {
@@ -56,18 +57,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     return;
                 }
 
-                // Determine role (mock for now, ideally fetch from backend)
-                // In a real app, we'd call an API to get the user's role from the Staff sheet
-                // For now, we'll assume everyone is Admin or Recruiter based on email or default
-                // We'll fetch the role from the backend in a future step if needed, 
-                // but for now let's just set a default role or check a hardcoded list if we want.
-                // Actually, the backend enforces roles. The frontend just needs to know for UI.
-                // Let's assume 'Admin' for Rob and 'Recruiter' for others for UI purposes, 
-                // or just 'Admin' for everyone for now to test.
+                // Verify against backend Staff sheet
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const result = await runGAS('verifyStaff', { userEmail: email }) as any;
 
-                const role = email.startsWith('rob') ? 'Admin' : 'Recruiter';
+                if (!result.success) {
+                    console.error('Staff verification failed:', result.error);
+                    alert(`Not Authorized: ${result.error || 'You are not listed in the Staff database.'}`);
+                    googleLogout();
+                    setIsLoading(false);
+                    return;
+                }
 
-                const userData: User = { email, name, picture, role };
+                const userData: User = {
+                    email: result.user.email,
+                    name: result.user.name,
+                    picture,
+                    role: result.user.role
+                };
 
                 setUser(userData);
                 localStorage.setItem('src_user', JSON.stringify(userData));
@@ -98,6 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
     const context = useContext(AuthContext);
     if (!context) {

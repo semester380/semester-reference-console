@@ -154,6 +154,35 @@ function getStaffByEmail(email) {
 }
 
 /**
+ * Verify staff access
+ * Returns details if valid, null/error if not
+ */
+function verifyStaffAccess(email) {
+  if (!email) {
+    return { success: false, error: 'Email required' };
+  }
+  
+  const staff = getStaffByEmail(email);
+  
+  if (!staff) {
+    return { success: false, error: 'User not found in staff database' };
+  }
+  
+  if (!staff.active) {
+    return { success: false, error: 'Staff account is deactivated' };
+  }
+  
+  return {
+    success: true,
+    user: {
+      name: staff.name,
+      email: staff.email,
+      role: staff.role
+    }
+  };
+}
+
+/**
  * List all active staff members (Admin only)
  */
 function listStaff() {

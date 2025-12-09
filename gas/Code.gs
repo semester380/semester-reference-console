@@ -225,7 +225,8 @@ function handleApiRequest(e) {
     const publicEndpoints = [
       'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
       'submitReference', 'uploadReferenceDocument', 'getTemplates', 
-      'authorizeConsent', 'getDefaultTemplate', 'fixPermissions'
+      'authorizeConsent', 'getDefaultTemplate', 'fixPermissions',
+      'verifyStaff'
     ];
     
     const adminOnlyEndpoints = [
@@ -290,6 +291,13 @@ function handleApiRequest(e) {
         const file = DriveApp.getFileById(id);
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
         result = { success: true, message: "Permissions updated to ANYONE_WITH_LINK" };
+        break;
+      case 'verifyStaff':
+        // Require Admin Key even though it's in "public" list (to prevent scraping)
+        if (!isAdminRequest(e)) {
+           throw new Error('Unauthorized: Missing valid admin key');
+        }
+        result = verifyStaffAccess(payload.userEmail);
         break;
 
       // Staff (Recruiter + Admin)
