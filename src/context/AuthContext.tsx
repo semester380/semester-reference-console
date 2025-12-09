@@ -65,6 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     // Verify against backend Staff sheet
                     return runGAS('verifyStaff', { userEmail: email })
                         .then((result: any) => {
+                            alert('THEN HANDLER CALLED! result=' + JSON.stringify(result));
                             console.log('[Auth] verifyStaff SUCCESS, result:', result);
 
                             if (!result || !result.success) {

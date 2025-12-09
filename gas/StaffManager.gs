@@ -162,8 +162,24 @@ function verifyStaffAccess(email) {
     return { success: false, error: 'Email required' };
   }
   
-  const staff = getStaffByEmail(email);
+  let staff = getStaffByEmail(email);
   
+  // Auto-bootstrap Owner if missing
+  if (!staff && email === 'rob@semester.co.uk') {
+     console.log('Bootstrapping Owner Account for ' + email);
+     
+     // Ensure Staff sheet exists first
+     const ss = getDatabaseSpreadsheet();
+     let staffSheet = ss.getSheetByName(SHEET_STAFF);
+     if (!staffSheet) {
+       console.log('Staff sheet missing, initializing...');
+       initializeStaffSheet();
+     }
+     
+     addStaff('Rob Arnold', email, 'Admin');
+     staff = getStaffByEmail(email);
+  }
+
   if (!staff) {
     return { success: false, error: 'User not found in staff database' };
   }

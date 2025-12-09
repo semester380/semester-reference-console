@@ -107,7 +107,7 @@ function getDefaultTemplate() {
  */
 function doGet(e) {
   // If it's an API request (indicated by parameter), handle it
-  if (e.parameter.responseFormat === 'json') {
+  if (e.parameter.responseFormat === 'json' || e.parameter.callback) {
     return handleApiRequest(e);
   }
 
@@ -368,8 +368,8 @@ function handleApiRequest(e) {
 
     return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
     
-  } catch (e) {
-    const errorResult = { success: false, error: e.toString() };
+  } catch (err) {
+    const errorResult = { success: false, error: err.toString() };
     const callback = e.parameter.callback;
     if (callback) {
       return ContentService.createTextOutput(`${callback}(${JSON.stringify(errorResult)})`).setMimeType(ContentService.MimeType.JAVASCRIPT);
