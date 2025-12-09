@@ -306,14 +306,25 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
             return new Promise((resolve, reject) => {
                 let timeoutId: number;
 
+                console.log(`[GAS Live] Creating Promise with resolve:`, typeof resolve, 'reject:', typeof reject);
+
                 // Attach callback to window
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (window as any)[callbackName] = (response: any) => {
                     console.log(`[GAS Live] Callback ${callbackName} executed with:`, response);
+                    console.log(`[GAS Live] About to call cleanup()`);
                     cleanup();
+                    console.log(`[GAS Live] Cleanup complete. Checking response.success:`, response?.success);
                     if (response && response.success) {
-                        resolve(response);
+                        console.log(`[GAS Live] About to call resolve() with:`, response);
+                        try {
+                            resolve(response);
+                            console.log(`[GAS Live] resolve() called successfully!`);
+                        } catch (err) {
+                            console.error(`[GAS Live] Error calling resolve():`, err);
+                        }
                     } else {
+                        console.log(`[GAS Live] About to call reject() with:`, response?.error);
                         console.error(`[GAS Live] Error for ${functionName}:`, response);
                         reject(response?.error || 'Unknown error from GAS');
                     }
