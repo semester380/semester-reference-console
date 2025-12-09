@@ -197,7 +197,7 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
     return new Promise((resolve, reject) => {
         const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
         // Hardcoded URL to ensure Vercel uses the correct active deployment (v40+)
-        const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbxLfH_xrN0vYEKZYC7W-8OzDwHJ_8V8bAJvzGG3FJRDnAHrcM4XUWWasLPY176f7Hz5/exec';
+        const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbx9VeVu647WJ3dQCuHX-LYAM9bdOrPfTXRpMU0K30WaBl_LIytaF4Dk8cTIdmPO3rgV/exec';
 
         if (useMocks) {
             // Local development mock
@@ -349,6 +349,7 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
                 };
 
                 // Add timeout in case callback is never called
+                // eslint-disable-next-line prefer-const
                 timeoutId = window.setTimeout(() => {
                     cleanup();
                     console.error(`[GAS Live] Timeout waiting for ${callbackName} after 30s`);
@@ -377,12 +378,15 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
  */
 export const runGASCallback = (
     functionName: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     params: any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (data: any) => void,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => void
 ) => {
     const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbxLfH_xrN0vYEKZYC7W-8OzDwHJ_8V8bAJvzGG3FJRDnAHrcM4XUWWasLPY176f7Hz5/exec';
+    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbx9VeVu647WJ3dQCuHX-LYAM9bdOrPfTXRpMU0K30WaBl_LIytaF4Dk8cTIdmPO3rgV/exec';
 
     if (useMocks) {
         console.log(`[GAS Mock] Calling ${functionName} with:`, params);
@@ -405,6 +409,7 @@ export const runGASCallback = (
 
     console.log(`[GAS Live Callback] Calling ${functionName} with:`, params);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const payload: any = { action: functionName };
 
     // Inject Auth/Admin Key
@@ -421,7 +426,7 @@ export const runGASCallback = (
             try {
                 const user = JSON.parse(storedUser);
                 if (user?.email) payload.userEmail = user.email;
-            } catch (e) { /* ignore */ }
+            } catch { /* ignore */ }
         }
     }
 
@@ -436,7 +441,7 @@ export const runGASCallback = (
 
     const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 
-    // Attach callback
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any)[callbackName] = (response: any) => {
         console.log(`[GAS Live Callback] ${callbackName} EXECUTED`, response);
         cleanup();

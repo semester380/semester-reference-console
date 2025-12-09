@@ -225,7 +225,7 @@ function handleApiRequest(e) {
     const publicEndpoints = [
       'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
       'submitReference', 'uploadReferenceDocument', 'getTemplates', 
-      'authorizeConsent', 'getDefaultTemplate', 'fixPermissions',
+      'authorizeConsent', 'getDefaultTemplate',
       'verifyStaff'
     ];
     
@@ -233,7 +233,8 @@ function handleApiRequest(e) {
       'archiveRequests', 'unarchiveRequests', 'deleteRequests', 
       'runSmartChase', 'runAnalysis', 'listStaff', 'addStaff', 
       'updateStaff', 'deactivateStaff', 'saveTemplate', 
-      'initializeDatabase', 'sealRequest'
+      'initializeDatabase', 'sealRequest', 'diagnoseConfig', 'fixPermissions',
+      'runCompleteE2ETest'
     ];
     
     const staffEndpoints = [
@@ -286,18 +287,19 @@ function handleApiRequest(e) {
       case 'getDefaultTemplate':
         result = { success: true, template: getDefaultTemplate() };
         break;
-      case 'fixPermissions':
-        const id = ScriptApp.getScriptId();
-        const file = DriveApp.getFileById(id);
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        result = { success: true, message: "Permissions updated to ANYONE_WITH_LINK" };
-        break;
+
       case 'verifyStaff':
         // Require Admin Key even though it's in "public" list (to prevent scraping)
         if (!isAdminRequest(e)) {
            throw new Error('Unauthorized: Missing valid admin key');
         }
         result = verifyStaffAccess(payload.userEmail);
+        break;
+
+
+
+      case 'runCompleteE2ETest':
+        result = runCompleteE2ETest();
         break;
 
       // Staff (Recruiter + Admin)
@@ -352,6 +354,27 @@ function handleApiRequest(e) {
         break;
       case 'deactivateStaff':
         result = deactivateStaff(payload.staffId);
+        break;
+      case 'fixPermissions':
+        const id = ScriptApp.getScriptId();
+        const file = DriveApp.getFileById(id);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        result = { success: true, message: "Permissions updated to ANYONE_WITH_LINK" };
+        break;
+      case 'diagnoseConfig':
+        const props = PropertiesService.getScriptProperties().getProperties();
+        result = {
+          success: true,
+          config: {
+            ADMIN_API_KEY: props.ADMIN_API_KEY ? 'SET' : 'MISSING',
+            PORTAL_BASE_URL: props.PORTAL_BASE_URL,
+            GeminiAPIKey: props.GeminiAPIKey ? 'SET' : 'MISSING'
+          },
+          identity: {
+            effectiveUser: Session.getEffectiveUser().getEmail(),
+            activeUser: Session.getActiveUser().getEmail()
+          }
+        };
         break;
 
       default:

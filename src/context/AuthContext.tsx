@@ -28,6 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const storedUser = localStorage.getItem('src_user');
         if (storedUser) {
             try {
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setUser(JSON.parse(storedUser));
             } catch {
                 localStorage.removeItem('src_user');
@@ -64,10 +65,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                     // Register global callback for verifyStaff response
                     const callbackId = `verifyStaffCallback_${Date.now()}`;
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     (window as any)[callbackId] = (response: any) => {
                         console.log('[Auth] GLOBAL CALLBACK EXECUTED!', response);
 
                         // Clean up
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         delete (window as any)[callbackId];
 
                         if (!response || !response.success) {
@@ -99,9 +102,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         userEmail: email
                     };
                     const script = document.createElement('script');
-                    const gasUrl = 'https://script.google.com/macros/s/AKfycbxLfH_xrN0vYEKZYC7W-8OzDwHJ_8V8bAJvzGG3FJRDnAHrcM4XUWWasLPY176f7Hz5/exec';
-                    script.src = `${gasUrl}?callback=${callbackId}&jsonPayload=${encodeURIComponent(JSON.stringify(payload))}`;
+                    // Hardcoded to v66 to ensure reliability (ignoring potentially stale Vercel envs)
+                    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbx9VeVu647WJ3dQCuHX-LYAM9bdOrPfTXRpMU0K30WaBl_LIytaF4Dk8cTIdmPO3rgV/exec';
+
+                    script.src = `${gasBaseUrl}?callback=${callbackId}&jsonPayload=${encodeURIComponent(JSON.stringify(payload))}`;
                     console.log('[Auth] Loading verifyStaff script with callback:', callbackId);
+
+                    script.onerror = (err) => {
+                        console.error('[Auth] Script load error:', err);
+                        // Clean up
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        delete (window as any)[callbackId];
+                        document.body.removeChild(script);
+
+                        // Show error
+                        alert('Connection to backend failed. Please try again or check your network.');
+                        googleLogout();
+                        setIsLoading(false);
+                    };
+
                     document.body.appendChild(script);
                 })
                 .catch((error) => {

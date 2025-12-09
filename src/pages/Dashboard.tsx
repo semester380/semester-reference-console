@@ -13,7 +13,8 @@ const Dashboard: React.FC = () => {
     const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
     const [requests, setRequests] = useState<Request[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [stats, setStats] = useState({ total: 0, pending: 0, completed: 0, flagged: 0, archived: 0 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [stats, setStats] = useState<any>({ total: 0, pending: 0, completed: 0, flagged: 0, archived: 0 });
 
     // New filter and search state
     const [statusFilter, setStatusFilter] = useState('all');
@@ -35,6 +36,7 @@ const Dashboard: React.FC = () => {
         runGASCallback(
             'getMyRequests',
             { includeArchived: true },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (response: any) => {
                 console.log('[Dashboard] Data received:', response);
                 const data = response?.data || [];
@@ -47,6 +49,7 @@ const Dashboard: React.FC = () => {
                     console.log(`[Dashboard] Set requests state with ${data.length} items`);
                 }, 0);
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (error: any) => {
                 console.error('[Dashboard] Failed to load requests:', error);
                 setIsLoading(false);
