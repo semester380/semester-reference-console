@@ -304,9 +304,12 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
             const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 
             return new Promise((resolve, reject) => {
+                let timeoutId: number;
+
                 // Attach callback to window
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (window as any)[callbackName] = (response: any) => {
+                    console.log(`[GAS Live] Callback ${callbackName} executed with:`, response);
                     cleanup();
                     if (response && response.success) {
                         resolve(response);
@@ -316,12 +319,20 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
                     }
                 };
 
+                console.log(`[GAS Live] Registered callback: ${callbackName}`);
+
                 // Construct URL with jsonPayload
                 const jsonPayload = JSON.stringify(payload);
                 const script = document.createElement('script');
                 // Use '?' if no query params yet, else '&' (gasBaseUrl usually ends with /exec)
                 const separator = gasBaseUrl.includes('?') ? '&' : '?';
-                script.src = `${gasBaseUrl}${separator}callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
+                const url = `${gasBaseUrl}${separator}callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
+                console.log(`[GAS Live] Loading script:`, url);
+                script.src = url;
+
+                script.onload = () => {
+                    console.log(`[GAS Live] Script loaded successfully for ${functionName}`);
+                };
 
                 script.onerror = (err) => {
                     cleanup();
@@ -329,9 +340,17 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
                     reject('Failed to load GAS script (Network/CORS/Auth error). Ensure you are logged in if required.');
                 };
 
+                // Add timeout in case callback is never called
+                timeoutId = window.setTimeout(() => {
+                    cleanup();
+                    console.error(`[GAS Live] Timeout waiting for ${callbackName} after 30s`);
+                    reject(`Timeout waiting for response from ${functionName}`);
+                }, 30000);
+
                 document.body.appendChild(script);
 
                 function cleanup() {
+                    if (timeoutId) clearTimeout(timeoutId);
                     // @ts-expect-error - cleanup dynamic global
                     delete window[callbackName];
                     if (script.parentNode) {
