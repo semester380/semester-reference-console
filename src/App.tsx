@@ -72,7 +72,6 @@ const ProtectedApp: React.FC = () => {
 
 const App: React.FC = () => {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-  console.log('Debug: ClientID loaded:', clientId, 'Length:', clientId?.length);
 
   if (!clientId) {
     return (
