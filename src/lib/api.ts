@@ -312,26 +312,19 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (window as any)[callbackName] = (response: any) => {
                     console.log(`[GAS Live] Callback ${callbackName} executed with:`, response);
-                    console.log(`[GAS Live] About to call cleanup()`);
-                    cleanup();
                     console.log(`[GAS Live] Cleanup complete. Checking response.success:`, response?.success);
 
-                    // CRITICAL: Defer resolve/reject to allow .then() handlers to attach
-                    setTimeout(() => {
-                        if (response && response.success) {
-                            console.log(`[GAS Live] About to call resolve() with:`, response);
-                            try {
-                                resolve(response);
-                                console.log(`[GAS Live] resolve() called successfully!`);
-                            } catch (err) {
-                                console.error(`[GAS Live] Error calling resolve():`, err);
-                            }
-                        } else {
-                            console.log(`[GAS Live] About to call reject() with:`, response?.error);
-                            console.error(`[GAS Live] Error for ${functionName}:`, response);
-                            reject(response?.error || 'Unknown error from GAS');
-                        }
-                    }, 0);
+                    if (response && response.success) {
+                        console.log(`[GAS Live] About to call resolve() IMMEDIATELY with:`, response);
+                        cleanup();
+                        resolve(response);
+                        console.log(`[GAS Live] resolve() called successfully!`);
+                    } else {
+                        console.log(`[GAS Live] About to call reject() with:`, response?.error);
+                        cleanup();
+                        console.error(`[GAS Live] Error for ${functionName}:`, response);
+                        reject(response?.error || 'Unknown error from GAS');
+                    }
                 };
 
                 console.log(`[GAS Live] Registered callback: ${callbackName}`);
