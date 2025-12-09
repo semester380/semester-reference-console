@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { googleLogout, useGoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
-import { runGAS } from '../lib/api';
 
 interface User {
     email: string;
@@ -40,6 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const login = useGoogleLogin({
         onSuccess: (tokenResponse) => {
             console.log('[Auth] Google login success, token received');
+            console.log('[Auth] VERSION: GLOBAL_CALLBACK_V2_VERIFIED'); // VERSION TAG
             setIsLoading(true);
 
             // Fetch user info from Google
@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         return;
                     }
 
-                    console.log('[Auth] Domain check passed, calling verifyStaff...');
+                    console.log('[Auth] Domain check passed, initializing global callback...');
 
                     // Register global callback for verifyStaff response
                     const callbackId = `verifyStaffCallback_${Date.now()}`;
