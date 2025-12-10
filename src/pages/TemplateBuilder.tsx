@@ -41,9 +41,10 @@ const TemplateBuilder: React.FC = () => {
                 }
             }
 
-            // Auto-select first template if none selected and templates exist
+            // Auto-select "Standard" template if available
             if (loadedTemplates.length > 0 && !selectedTemplateId) {
-                const first = loadedTemplates[0];
+                const standard = loadedTemplates.find((t: any) => t.templateId === 'standard-social-care');
+                const first = standard || loadedTemplates[0];
                 setTemplateName(first.name);
                 setFields(first.structureJSON);
                 setSelectedTemplateId(first.templateId);
@@ -190,24 +191,46 @@ const TemplateBuilder: React.FC = () => {
                             </button>
                         </div>
                         {isTemplateAdmin && (
-                            <Button
-                                variant="secondary"
-                                onClick={async () => {
-                                    if (window.confirm('Restore default templates? This will add the Standard Social Care Reference if missing.')) {
-                                        try {
-                                            await runGAS('initializeDatabase');
-                                            alert('Defaults restored!');
-                                            await loadTemplates();
-                                        } catch (e) {
-                                            alert('Failed to restore defaults: ' + e);
+                            <>
+                                <Button
+                                    variant="secondary"
+                                    onClick={async () => {
+                                        if (window.confirm('Restore default templates? This will add the Standard Social Care Reference if missing.')) {
+                                            try {
+                                                await runGAS('initializeDatabase');
+                                                alert('Defaults restored!');
+                                                await loadTemplates();
+                                            } catch (e) {
+                                                alert('Failed to restore defaults: ' + e);
+                                            }
                                         }
-                                    }
-                                }}
-                                className="bg-white/10 text-white border-white/20 hover:bg-white/20"
-                            >
-                                Restore Defaults
-                            </Button>
+                                    }}
+                                    className="bg-white/10 text-white border-white/20 hover:bg-white/20"
+                                >
+                                    Restore(Soft)
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    onClick={async () => {
+                                        if (window.confirm('HARD RESET: This will DELETE ALL templates and restore the default one. Are you sure?')) {
+                                            try {
+                                                await runGAS('resetTemplates');
+                                                alert('Templates reset completely.');
+                                                await loadTemplates();
+                                            } catch (e) {
+                                                alert('Hard reset failed: ' + e);
+                                            }
+                                        }
+                                    }}
+                                    className="bg-red-500/20 text-red-200 border-red-500/30 hover:bg-red-500/30 ml-2"
+                                >
+                                    Hard Reset
+                                </Button>
+                            </>
                         )}
+                        <span className="text-xs text-white/30 ml-2 block">
+                            Loaded: {templates.length}
+                        </span>
                         {selectedTemplateId && isTemplateAdmin && (
                             <Button
                                 variant="secondary"

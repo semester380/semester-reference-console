@@ -302,7 +302,7 @@ function handleApiRequest(e) {
       'archiveRequests', 'unarchiveRequests', 'deleteRequests', 
       'runSmartChase', 'runAnalysis', 'listStaff', 'addStaff', 
       'updateStaff', 'deactivateStaff', 
-      'initializeDatabase', 'sealRequest', 'diagnoseConfig', 'fixPermissions',
+      'initializeDatabase', 'resetTemplates', 'sealRequest', 'diagnoseConfig', 'fixPermissions',
       'runCompleteE2ETest', 'runQA', 'saveTemplate', 'deleteTemplate'
     ];
     
@@ -391,6 +391,9 @@ function handleApiRequest(e) {
       // Admin Only
       case 'initializeDatabase':
         result = initializeDatabase();
+        break;
+      case 'resetTemplates':
+        result = resetTemplates();
         break;
       case 'saveTemplate':
         result = saveTemplate(payload.templateName, payload.structureJSON, payload.templateId, staff);
@@ -649,6 +652,25 @@ function initializeDatabase() {
 }
 
 /**
+ * Hard Reset for Templates (User requested fix for corrupt data)
+ */
+function resetTemplates() {
+  const ss = getDatabaseSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_TEMPLATES);
+  if (sheet) {
+    sheet.clear();
+  } else {
+    sheet = ss.insertSheet(SHEET_TEMPLATES);
+  }
+  sheet.appendRow(['TemplateID', 'Name', 'StructureJSON', 'CreatedBy', 'Timestamp']);
+  sheet.setFrozenRows(1);
+  SpreadsheetApp.flush();
+  
+  // Re-seed with default
+  return initializeDatabase();
+}
+
+/**
  * Get or create the master spreadsheet
  * Safely ignores Trashed files to prevent corruption
  */
@@ -661,7 +683,6 @@ function getDatabaseSpreadsheet() {
     }
   }
   return SpreadsheetApp.create(DB_SPREADSHEET_NAME);
-}  }
 }
 
 /**

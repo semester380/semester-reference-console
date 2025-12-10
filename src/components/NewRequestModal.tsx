@@ -33,16 +33,25 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({ isOpen, onClos
     const loadTemplates = async () => {
         setLoading(true);
         try {
+            console.log("Fetching templates...");
             const result = await runGAS('getTemplates');
+            console.log("Templates fetched:", result);
+
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const loaded: Template[] = Array.isArray(result) ? result : (result as any).data || [];
+            console.log("Processed templates:", loaded);
 
             setTemplates(loaded);
-            if (loaded.length > 0 && !selectedTemplateId) {
-                setSelectedTemplateId(loaded[0].templateId);
+            if (loaded.length > 0) {
+                if (!selectedTemplateId) {
+                    setSelectedTemplateId(loaded[0].templateId);
+                }
+            } else {
+                console.warn("Template list is empty");
             }
         } catch (error) {
             console.error("Failed to load templates", error);
+            alert("Error loading templates (check console): " + error);
         } finally {
             setLoading(false);
         }
