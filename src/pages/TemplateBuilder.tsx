@@ -5,7 +5,12 @@ import { runGAS } from '../lib/api';
 import { Logo } from '../components/Logo';
 import type { TemplateField, Template } from '../types';
 
+import { useAuth } from '../context/AuthContext';
+
 const TemplateBuilder: React.FC = () => {
+    const { user } = useAuth();
+    const isTemplateAdmin = user?.email === 'rob@semester.co.uk' || user?.email === 'nicola@semester.co.uk';
+
     const [templateName, setTemplateName] = useState('New Reference Template');
     const [fields, setFields] = useState<TemplateField[]>([]);
     const [isSaving, setIsSaving] = useState(false);
@@ -25,9 +30,12 @@ const TemplateBuilder: React.FC = () => {
 
             setTemplates(loadedTemplates);
 
-            // If templates exist and none selected, load the first one (or most recent)
+            // Auto-select first template if none selected and templates exist
             if (loadedTemplates.length > 0 && !selectedTemplateId) {
-                // selectTemplate(loadedTemplates[loadedTemplates.length - 1]); // Load latest
+                const first = loadedTemplates[0];
+                setTemplateName(first.name);
+                setFields(first.structureJSON);
+                setSelectedTemplateId(first.templateId);
             }
         } catch (error) {
             console.error("Failed to load templates", error);
@@ -45,12 +53,14 @@ const TemplateBuilder: React.FC = () => {
     };
 
     const handleNewTemplate = () => {
+        if (!isTemplateAdmin) return;
         setTemplateName('New Reference Template');
         setFields([]);
         setSelectedTemplateId('');
     };
 
     const addField = (type: TemplateField['type']) => {
+        if (!isTemplateAdmin) return;
         const newField: TemplateField = {
             id: `field_${Date.now()}`,
             type,
@@ -62,14 +72,17 @@ const TemplateBuilder: React.FC = () => {
     };
 
     const updateField = (id: string, updates: Partial<TemplateField>) => {
+        if (!isTemplateAdmin) return;
         setFields(fields.map(f => f.id === id ? { ...f, ...updates } : f));
     };
 
     const removeField = (id: string) => {
+        if (!isTemplateAdmin) return;
         setFields(fields.filter(f => f.id !== id));
     };
 
     const moveField = (index: number, direction: 'up' | 'down') => {
+        if (!isTemplateAdmin) return;
         if (
             (direction === 'up' && index === 0) ||
             (direction === 'down' && index === fields.length - 1)
@@ -82,6 +95,7 @@ const TemplateBuilder: React.FC = () => {
     };
 
     const handleSave = async () => {
+        if (!isTemplateAdmin) return;
         setIsSaving(true);
         try {
             // Pass selectedTemplateId if updating, or undefined/null if new
@@ -110,9 +124,12 @@ const TemplateBuilder: React.FC = () => {
                 <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
                     <div>
                         <Logo inverted={true} />
-                        <p className="text-sm text-blue-100 mt-1 pl-10">
-                            Template Builder
-                        </p>
+                        <div className="flex items-center gap-2 mt-1 pl-10">
+                            <p className="text-sm text-blue-100">Template Builder</p>
+                            {!isTemplateAdmin && (
+                                <span className="bg-white/10 text-white text-xs px-2 py-0.5 rounded border border-white/20">Read Only</span>
+                            )}
+                        </div>
                     </div>
                     <div className="flex gap-3 items-center">
                         <div className="mr-4">
@@ -126,7 +143,7 @@ const TemplateBuilder: React.FC = () => {
                                     else handleNewTemplate();
                                 }}
                             >
-                                <option value="" className="text-gray-900">+ Create New Template</option>
+                                {isTemplateAdmin && <option value="" className="text-gray-900">+ Create New Template</option>}
                                 <option disabled className="text-gray-900">──────────</option>
                                 {templates.map(t => (
                                     <option key={t.templateId} value={t.templateId} className="text-gray-900">
@@ -155,7 +172,7 @@ const TemplateBuilder: React.FC = () => {
                                 Preview
                             </button>
                         </div>
-                        {selectedTemplateId && (
+                        {selectedTemplateId && isTemplateAdmin && (
                             <Button
                                 variant="secondary"
                                 onClick={async () => {
@@ -175,9 +192,11 @@ const TemplateBuilder: React.FC = () => {
                                 Delete
                             </Button>
                         )}
-                        <Button onClick={handleSave} disabled={isSaving}>
-                            {isSaving ? 'Saving...' : 'Save Template'}
-                        </Button>
+                        {isTemplateAdmin && (
+                            <Button onClick={handleSave} disabled={isSaving}>
+                                {isSaving ? 'Saving...' : 'Save Template'}
+                            </Button>
+                        )}
                     </div>
                 </div>
             </header>
@@ -195,6 +214,7 @@ const TemplateBuilder: React.FC = () => {
                                 value={templateName}
                                 onChange={(e) => setTemplateName(e.target.value)}
                                 placeholder="e.g., Senior Developer Reference"
+                                disabled={!isTemplateAdmin}
                             />
                         </div>
 
@@ -210,14 +230,14 @@ const TemplateBuilder: React.FC = () => {
                                                 <div className="flex flex-col">
                                                     <button
                                                         onClick={() => moveField(index, 'up')}
-                                                        disabled={index === 0}
+                                                        disabled={index === 0 || !isTemplateAdmin}
                                                         className="text-nano-gray-400 hover:text-semester-blue disabled:opacity-30 text-xs"
                                                     >
                                                         ▲
                                                     </button>
                                                     <button
                                                         onClick={() => moveField(index, 'down')}
-                                                        disabled={index === fields.length - 1}
+                                                        disabled={index === fields.length - 1 || !isTemplateAdmin}
                                                         className="text-nano-gray-400 hover:text-semester-blue disabled:opacity-30 text-xs"
                                                     >
                                                         ▼
@@ -226,7 +246,8 @@ const TemplateBuilder: React.FC = () => {
                                             </div>
                                             <button
                                                 onClick={() => removeField(field.id)}
-                                                className="text-status-error opacity-0 group-hover:opacity-100 transition-opacity text-sm hover:underline"
+                                                disabled={!isTemplateAdmin}
+                                                className="text-status-error opacity-0 group-hover:opacity-100 transition-opacity text-sm hover:underline disabled:hidden"
                                             >
                                                 Remove
                                             </button>
@@ -237,9 +258,10 @@ const TemplateBuilder: React.FC = () => {
                                                 <label className="block text-xs font-medium text-nano-gray-500 mb-1">Question Label</label>
                                                 <input
                                                     type="text"
-                                                    className="w-full px-3 py-2 rounded border border-nano-gray-300 focus:ring-semester-blue focus:border-semester-blue text-sm"
+                                                    className="w-full px-3 py-2 rounded border border-nano-gray-300 focus:ring-semester-blue focus:border-semester-blue text-sm disabled:bg-gray-100 disabled:text-gray-500"
                                                     value={field.label}
                                                     onChange={(e) => updateField(field.id, { label: e.target.value })}
+                                                    disabled={!isTemplateAdmin}
                                                 />
                                             </div>
 
@@ -247,9 +269,10 @@ const TemplateBuilder: React.FC = () => {
                                             <div>
                                                 <label className="block text-xs font-medium text-nano-gray-500 mb-1">Field Width (Desktop)</label>
                                                 <select
-                                                    className="w-full px-3 py-2 rounded border border-nano-gray-300 focus:ring-semester-blue focus:border-semester-blue text-sm"
+                                                    className="w-full px-3 py-2 rounded border border-nano-gray-300 focus:ring-semester-blue focus:border-semester-blue text-sm disabled:bg-gray-100 disabled:text-gray-500"
                                                     value={field.layout || 'full'}
                                                     onChange={(e) => updateField(field.id, { layout: e.target.value as 'full' | 'half' })}
+                                                    disabled={!isTemplateAdmin}
                                                 >
                                                     <option value="full">Full Width</option>
                                                     <option value="half">Half Width</option>
@@ -262,7 +285,8 @@ const TemplateBuilder: React.FC = () => {
                                                     id={`req-${field.id}`}
                                                     checked={field.required}
                                                     onChange={(e) => updateField(field.id, { required: e.target.checked })}
-                                                    className="rounded border-nano-gray-300 text-semester-blue focus:ring-semester-blue"
+                                                    className="rounded border-nano-gray-300 text-semester-blue focus:ring-semester-blue disabled:opacity-50"
+                                                    disabled={!isTemplateAdmin}
                                                 />
                                                 <label htmlFor={`req-${field.id}`} className="text-sm text-nano-gray-700">Required field</label>
                                             </div>
@@ -279,47 +303,49 @@ const TemplateBuilder: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="p-6 border-t border-nano-gray-200 bg-nano-gray-50 rounded-b-xl">
-                            <p className="text-xs font-medium text-nano-gray-500 uppercase mb-3">Add Field</p>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <button
-                                    onClick={() => addField('rating')}
-                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                >
-                                    ⭐ Rating
-                                </button>
-                                <button
-                                    onClick={() => addField('text')}
-                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                >
-                                    📝 Text
-                                </button>
-                                <button
-                                    onClick={() => addField('boolean')}
-                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                >
-                                    ✓ Yes/No
-                                </button>
-                                <button
-                                    onClick={() => addField('date')}
-                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                >
-                                    📅 Date
-                                </button>
-                                <button
-                                    onClick={() => addField('textarea')}
-                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                >
-                                    📄 Long Text
-                                </button>
-                                <button
-                                    onClick={() => addField('signature')}
-                                    className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                >
-                                    ✍️ Signature
-                                </button>
+                        {isTemplateAdmin && (
+                            <div className="p-6 border-t border-nano-gray-200 bg-nano-gray-50 rounded-b-xl">
+                                <p className="text-xs font-medium text-nano-gray-500 uppercase mb-3">Add Field</p>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <button
+                                        onClick={() => addField('rating')}
+                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                    >
+                                        ⭐ Rating
+                                    </button>
+                                    <button
+                                        onClick={() => addField('text')}
+                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                    >
+                                        📝 Text
+                                    </button>
+                                    <button
+                                        onClick={() => addField('boolean')}
+                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                    >
+                                        ✓ Yes/No
+                                    </button>
+                                    <button
+                                        onClick={() => addField('date')}
+                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                    >
+                                        📅 Date
+                                    </button>
+                                    <button
+                                        onClick={() => addField('textarea')}
+                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                    >
+                                        📄 Long Text
+                                    </button>
+                                    <button
+                                        onClick={() => addField('signature')}
+                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
+                                    >
+                                        ✍️ Signature
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </Card>
                 </div>
 
