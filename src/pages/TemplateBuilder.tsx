@@ -30,7 +30,8 @@ const TemplateBuilder: React.FC = () => {
 
             setTemplates(loadedTemplates);
 
-            // Helpful Debugging for "Empty Dropdown" issue:
+
+            // HELPFUL DEBUG & AUTO-REPAIR
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const meta = (result as any).meta;
             if (loadedTemplates.length === 0) {
@@ -38,6 +39,31 @@ const TemplateBuilder: React.FC = () => {
                     alert(`DEBUG: No templates found.\nTotal Rows in Sheet: ${meta.totalRows}\nParse Errors: ${meta.parseErrors}\nSheet Name: ${meta.sheetName}`);
                 } else {
                     console.warn("No templates found and no metadata returned.");
+                }
+            } else {
+                // Check for "Corrupt Structure" (Empty fields on Standard Template)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const standard = loadedTemplates.find((t: any) => t.templateId === 'standard-social-care' || t.name === 'Standard Social Care Reference');
+                if (standard) {
+                    const hasFields = standard.structureJSON && Array.isArray(standard.structureJSON) && standard.structureJSON.length > 0;
+                    if (!hasFields) {
+                        const repairKey = 'template_repair_attempted_' + Date.now().toString().substring(0, 8); // Unique per session/day approx
+                        // Use a simpler flag to avoid infinite loops in short term
+                        if (!sessionStorage.getItem('repair_triggered')) {
+                            sessionStorage.setItem('repair_triggered', 'true');
+                            console.warn("CORRUPT TEMPLATE DETECTED: Auto-repairing...");
+                            try {
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                const repairResult = await runGAS('fixTemplateStructure') as any;
+                                alert(`System Self-Repair: Standard Template restored.\nField Count: ${repairResult.fieldCount}`);
+                                // Reload
+                                window.location.reload();
+                                return;
+                            } catch (err) {
+                                alert("System Self-Repair Failed: " + err);
+                            }
+                        }
+                    }
                 }
             }
 
