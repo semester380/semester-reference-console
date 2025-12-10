@@ -526,22 +526,17 @@ function initializeDatabase() {
     templatesSheet.setFrozenRows(1);
   }
   
-  // Always ensure default template exists and is up to date
-  const defaultStructure = [
-    { id: 'q1', type: 'rating', label: 'Technical Competence', required: true },
-    { id: 'q2', type: 'rating', label: 'Communication Skills', required: true },
-    { id: 'q3', type: 'boolean', label: 'Would you rehire this person?', required: true },
-    { id: 'q4', type: 'text', label: 'Additional Comments', required: false },
-    { id: 'sig1', type: 'signature', label: 'I confirm this reference is accurate', required: false }
-  ];
-  
-  const defaultJson = JSON.stringify(defaultStructure);
+  // Ensure the rich DEFAULT_TEMPLATE exists
+  const defaultTmpl = getDefaultTemplate();
   const tData = templatesSheet.getDataRange().getValues();
   let found = false;
   
   for (let i = 1; i < tData.length; i++) {
-    if (tData[i][0] === 'default') {
-       templatesSheet.getRange(i + 1, 3).setValue(defaultJson); // Update structure
+    // Check for ID match
+    if (tData[i][0] === defaultTmpl.id) {
+       // Optional: Update it to ensure it's the latest version (commented out to avoid overwriting user edits if they kept the ID)
+       // But for this "Reset" purpose, maybe we should update it if requested? 
+       // For now, let's just ensure it exists.
        found = true;
        break;
     }
@@ -549,9 +544,9 @@ function initializeDatabase() {
   
   if (!found) {
     templatesSheet.appendRow([
-      'default', 
-      'Standard Employment Reference', 
-      defaultJson, 
+      defaultTmpl.id, 
+      defaultTmpl.name, 
+      JSON.stringify(defaultTmpl.sections), // Note: Frontend expects array of fields or sections. DEFAULT_TEMPLATE has sections.
       'system', 
       new Date()
     ]);

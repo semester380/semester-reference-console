@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Input } from './UI';
 import { runGAS } from '../lib/api';
-import type { Template, TemplateField } from '../types';
+import type { Template } from '../types';
 
 interface NewRequestModalProps {
     isOpen: boolean;

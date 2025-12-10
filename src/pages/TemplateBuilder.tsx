@@ -130,7 +130,7 @@ const TemplateBuilder: React.FC = () => {
                         <div>
                             <Logo inverted={true} />
                             <div className="flex items-center gap-2 mt-1 pl-10">
-                                <p className="text-sm text-blue-100">Template Builder</p>
+                                <p className="text-sm text-blue-100">Template Builder <span className="opacity-50 text-xs ml-1">v0.0.2</span></p>
                                 {!isTemplateAdmin && (
                                     <span className="bg-white/10 text-white text-xs px-2 py-0.5 rounded border border-white/20">Read Only</span>
                                 )}
@@ -178,6 +178,25 @@ const TemplateBuilder: React.FC = () => {
                                 Preview
                             </button>
                         </div>
+                        {isTemplateAdmin && (
+                            <Button
+                                variant="secondary"
+                                onClick={async () => {
+                                    if (window.confirm('Restore default templates? This will add the Standard Social Care Reference if missing.')) {
+                                        try {
+                                            await runGAS('initializeDatabase');
+                                            alert('Defaults restored!');
+                                            await loadTemplates();
+                                        } catch (e) {
+                                            alert('Failed to restore defaults: ' + e);
+                                        }
+                                    }
+                                }}
+                                className="bg-white/10 text-white border-white/20 hover:bg-white/20"
+                            >
+                                Restore Defaults
+                            </Button>
+                        )}
                         {selectedTemplateId && isTemplateAdmin && (
                             <Button
                                 variant="secondary"
