@@ -8,7 +8,10 @@ import { Logo } from '../components/Logo';
 import { runGAS, runGASCallback } from '../lib/api';
 import type { Request } from '../types';
 
+import { useAuth } from '../context/AuthContext';
+
 const Dashboard: React.FC = () => {
+    const { logout } = useAuth();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
     const [requests, setRequests] = useState<Request[]>([]);
@@ -254,6 +257,9 @@ const Dashboard: React.FC = () => {
                         </Button>
                         <Button onClick={() => setIsModalOpen(true)} className="bg-white text-semester-blue hover:bg-blue-50 font-semibold shadow-sm border-none">
                             + New Request
+                        </Button>
+                        <Button variant="secondary" className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:border-white/40" onClick={logout}>
+                            Sign Out
                         </Button>
                     </div>
                 </div>

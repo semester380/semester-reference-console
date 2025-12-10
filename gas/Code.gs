@@ -232,9 +232,9 @@ function handleApiRequest(e) {
     const adminOnlyEndpoints = [
       'archiveRequests', 'unarchiveRequests', 'deleteRequests', 
       'runSmartChase', 'runAnalysis', 'listStaff', 'addStaff', 
-      'updateStaff', 'deactivateStaff', 'saveTemplate', 'deleteTemplate',
+      'updateStaff', 'deactivateStaff', 
       'initializeDatabase', 'sealRequest', 'diagnoseConfig', 'fixPermissions',
-      'runCompleteE2ETest', 'runQA'
+      'runCompleteE2ETest', 'runQA', 'saveTemplate', 'deleteTemplate'
     ];
     
     const staffEndpoints = [
@@ -287,7 +287,7 @@ function handleApiRequest(e) {
       case 'getDefaultTemplate':
         result = { success: true, template: getDefaultTemplate() };
         break;
-
+ 
       case 'verifyStaff':
         // Require Admin Key even though it's in "public" list (to prevent scraping)
         if (!isAdminRequest(e)) {
@@ -324,10 +324,10 @@ function handleApiRequest(e) {
         result = initializeDatabase();
         break;
       case 'saveTemplate':
-        result = saveTemplate(payload.templateName, payload.structureJSON, payload.templateId);
+        result = saveTemplate(payload.templateName, payload.structureJSON, payload.templateId, staff);
         break;
       case 'deleteTemplate':
-        result = deleteTemplate(payload.templateId);
+        result = deleteTemplate(payload.templateId, staff);
         break;
       case 'archiveRequests':
         result = archiveRequests(payload.requestIds, staff);
@@ -1167,8 +1167,18 @@ function getMyRequests(includeArchived = false) {
   return { success: true, data: myRequests.reverse() };
 }
 
+// --- Template Seeding (REMOVED) ---
+// Seeder run complete. Code removed for security.
+
+// Helper to check for Template Admin
+function isTemplateAdmin(email) {
+  const allowed = ['rob@semester.co.uk', 'nicola@semester.co.uk'];
+  return allowed.includes(email);
+}
+
 function getAllAIResults() {
   const ss = getDatabaseSpreadsheet();
+
   const sheet = ss.getSheetByName("AI_Results");
   if (!sheet) return {};
   
@@ -1268,10 +1278,14 @@ function getTemplateById(templateId) {
   return null;
 }
 
-function saveTemplate(name, structure, templateId) {
+function saveTemplate(name, structure, templateId, staff) {
   try {
-    const ss = getDatabaseSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_TEMPLATES);
+    if (!staff || !isTemplateAdmin(staff.email)) {
+      throw new Error('Unauthorized: Only specialized admins can edit templates.');
+    }
+    
+    const db = getDatabaseSpreadsheet();
+    const sheet = db.getSheetByName("Template_Definitions");
     const data = sheet.getDataRange().getValues();
     const user = Session.getActiveUser().getEmail();
     const timestamp = new Date();

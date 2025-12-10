@@ -8,7 +8,7 @@ import type { TemplateField, Template } from '../types';
 import { useAuth } from '../context/AuthContext';
 
 const TemplateBuilder: React.FC = () => {
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const isTemplateAdmin = user?.email === 'rob@semester.co.uk' || user?.email === 'nicola@semester.co.uk';
 
     const [templateName, setTemplateName] = useState('New Reference Template');
@@ -197,6 +197,9 @@ const TemplateBuilder: React.FC = () => {
                                 {isSaving ? 'Saving...' : 'Save Template'}
                             </Button>
                         )}
+                        <Button variant="secondary" className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:border-white/40" onClick={logout}>
+                            Sign Out
+                        </Button>
                     </div>
                 </div>
             </header>
