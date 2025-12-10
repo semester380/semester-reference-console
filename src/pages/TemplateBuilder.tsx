@@ -30,6 +30,17 @@ const TemplateBuilder: React.FC = () => {
 
             setTemplates(loadedTemplates);
 
+            // Helpful Debugging for "Empty Dropdown" issue:
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const meta = (result as any).meta;
+            if (loadedTemplates.length === 0) {
+                if (meta) {
+                    alert(`DEBUG: No templates found.\nTotal Rows in Sheet: ${meta.totalRows}\nParse Errors: ${meta.parseErrors}\nSheet Name: ${meta.sheetName}`);
+                } else {
+                    console.warn("No templates found and no metadata returned.");
+                }
+            }
+
             // Auto-select first template if none selected and templates exist
             if (loadedTemplates.length > 0 && !selectedTemplateId) {
                 const first = loadedTemplates[0];
@@ -130,7 +141,7 @@ const TemplateBuilder: React.FC = () => {
                         <div>
                             <Logo inverted={true} />
                             <div className="flex items-center gap-2 mt-1 pl-10">
-                                <p className="text-sm text-blue-100">Template Builder <span className="opacity-50 text-xs ml-1">v0.0.2</span></p>
+                                <p className="text-sm text-blue-100">Template Builder <span className="opacity-50 text-xs ml-1">v0.0.3 + Debug</span></p>
                                 {!isTemplateAdmin && (
                                     <span className="bg-white/10 text-white text-xs px-2 py-0.5 rounded border border-white/20">Read Only</span>
                                 )}

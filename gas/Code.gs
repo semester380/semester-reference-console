@@ -103,6 +103,75 @@ function getDefaultTemplate() {
 }
 
 /**
+ * Get templates with auto-healing and debug info
+ */
+function getTemplates() {
+  const ss = getDatabaseSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_TEMPLATES);
+  
+  // Auto-heal if missing sheet
+  if (!sheet) {
+     console.log("Sheet missing, initializing...");
+     initializeDatabase();
+     SpreadsheetApp.flush(); // Force write
+     sheet = ss.getSheetByName(SHEET_TEMPLATES);
+  }
+
+  // Auto-heal if empty (just header)
+  if (sheet.getLastRow() <= 1) {
+     console.log("Sheet empty, initializing...");
+     initializeDatabase();
+     SpreadsheetApp.flush(); // Force write
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  const templates = [];
+  let parseErrors = 0;
+  
+  for (let i = 1; i < data.length; i++) {
+    try {
+      const jsonStr = data[i][2];
+      if (!jsonStr || jsonStr === '') {
+          parseErrors++;
+          continue;
+      }
+      
+      let structure = [];
+      try {
+        structure = JSON.parse(jsonStr);
+      } catch (jsonErr) {
+        console.error("JSON Parse Error Row " + (i+1) + ": " + jsonErr);
+        // Fallback: If it's the default template, recover it? 
+        // For now just count error
+        parseErrors++;
+        continue;
+      }
+
+      templates.push({
+        templateId: data[i][0],
+        name: data[i][1],
+        structureJSON: structure,
+        active: true
+      });
+    } catch (e) {
+      console.error("General Row Error " + (i+1) + ": " + e);
+      parseErrors++;
+    }
+  }
+  
+  return { 
+      success: true, 
+      data: templates, 
+      meta: { 
+          totalRows: data.length, 
+          parseErrors: parseErrors,
+          sheetName: sheet.getName()
+      } 
+  };
+}
+
+
+/**
  * Serves the React application via HtmlService OR handles JSON API requests
  */
 function doGet(e) {
@@ -528,15 +597,31 @@ function initializeDatabase() {
   
   // Ensure the rich DEFAULT_TEMPLATE exists
   const defaultTmpl = getDefaultTemplate();
+  
+  // Flatten Sections to Fields for Frontend Compatibility
+  // The Frontend Builder expects a flat array of TemplateField[], not nested sections.
+  let flatFields = [];
+  if (defaultTmpl.sections) {
+    defaultTmpl.sections.forEach(section => {
+      // Add section header as a "label" or just append fields?
+      // For now, just append fields to ensure they appear in the builder.
+      if (section.fields) {
+        flatFields = flatFields.concat(section.fields);
+      }
+    });
+  }
+  const flatJson = JSON.stringify(flatFields);
+
   const tData = templatesSheet.getDataRange().getValues();
   let found = false;
   
   for (let i = 1; i < tData.length; i++) {
     // Check for ID match
     if (tData[i][0] === defaultTmpl.id) {
-       // Optional: Update it to ensure it's the latest version (commented out to avoid overwriting user edits if they kept the ID)
-       // But for this "Reset" purpose, maybe we should update it if requested? 
-       // For now, let's just ensure it exists.
+       // FORCE UPDATE to fix corruption/mismatch
+       // We overwrite the StructureJSON with the flat version
+       templatesSheet.getRange(i + 1, 3).setValue(flatJson); 
+       templatesSheet.getRange(i + 1, 2).setValue(defaultTmpl.name); // Ensure name is correct too
        found = true;
        break;
     }
@@ -546,7 +631,7 @@ function initializeDatabase() {
     templatesSheet.appendRow([
       defaultTmpl.id, 
       defaultTmpl.name, 
-      JSON.stringify(defaultTmpl.sections), // Note: Frontend expects array of fields or sections. DEFAULT_TEMPLATE has sections.
+      flatJson,
       'system', 
       new Date()
     ]);
@@ -565,14 +650,18 @@ function initializeDatabase() {
 
 /**
  * Get or create the master spreadsheet
+ * Safely ignores Trashed files to prevent corruption
  */
 function getDatabaseSpreadsheet() {
   const files = DriveApp.getFilesByName(DB_SPREADSHEET_NAME);
-  if (files.hasNext()) {
-    return SpreadsheetApp.open(files.next());
-  } else {
-    return SpreadsheetApp.create(DB_SPREADSHEET_NAME);
+  while (files.hasNext()) {
+    const file = files.next();
+    if (!file.isTrashed()) {
+      return SpreadsheetApp.open(file);
+    }
   }
+  return SpreadsheetApp.create(DB_SPREADSHEET_NAME);
+}  }
 }
 
 /**
