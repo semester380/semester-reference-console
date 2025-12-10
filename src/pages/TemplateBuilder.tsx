@@ -214,7 +214,7 @@ const TemplateBuilder: React.FC = () => {
                                     onClick={async () => {
                                         if (window.confirm('FIX TEMPLATE STRUCTURE: This will wipe existing templates and recreate the default one with correct structure. Continue?')) {
                                             try {
-                                                const result = await runGAS('fixTemplateStructure');
+                                                const result = await runGAS('fixTemplateStructure') as { message: string, fieldCount: number };
                                                 alert(`Success! ${result.message}\nFields: ${result.fieldCount}`);
                                                 await loadTemplates();
                                             } catch (e) {
