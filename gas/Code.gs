@@ -479,6 +479,15 @@ function handleApiRequest(e) {
   } finally {
     lock.releaseLock();
   }
+
+}
+
+/**
+ * Helper to create standardized error responses
+ */
+function createErrorResponse(message) {
+  return ContentService.createTextOutput(JSON.stringify({ success: false, error: message }))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function testConsentLogic(token) {
@@ -2024,4 +2033,18 @@ function getAuditTrail(requestId) {
     }
   }
   return trail;
+}
+
+/**
+ * Send critical error alert to admin
+ */
+function sendErrorAlert(context, error) {
+  const adminEmail = Session.getEffectiveUser().getEmail();
+  if (adminEmail) {
+    MailApp.sendEmail({
+      to: adminEmail,
+      subject: `CRITICAL ERROR: ${context}`,
+      body: `Error details:\n\n${error.toString()}\n\nStack:\n${error.stack || 'No stack trace'}`
+    });
+  }
 }
