@@ -104,7 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     };
                     const script = document.createElement('script');
                     // Production v97 - Template Fix
-                    const GAS_DEPLOYMENT_ID = 'AKfycbxeShUdzdezyWllbnl1-XcNbTovaXzBt9e2X4fy8XptiOfpN977XJok6GajdN_yVSV-';
+                    const GAS_DEPLOYMENT_ID = 'AKfycbw_bRkR4pDtIDtQv2mP8bSoB1ZqQDSkOVndaEgfluA8QEPf-9azWjb7L6-BVHHGsAtb';
                     const gasBaseUrl = `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
 
                     script.src = `${gasBaseUrl}?callback=${callbackId}&jsonPayload=${encodeURIComponent(JSON.stringify(payload))}`;

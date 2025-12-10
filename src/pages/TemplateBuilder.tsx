@@ -212,19 +212,19 @@ const TemplateBuilder: React.FC = () => {
                                 <Button
                                     variant="secondary"
                                     onClick={async () => {
-                                        if (window.confirm('HARD RESET: This will DELETE ALL templates and restore the default one. Are you sure?')) {
+                                        if (window.confirm('FIX TEMPLATE STRUCTURE: This will wipe existing templates and recreate the default one with correct structure. Continue?')) {
                                             try {
-                                                await runGAS('resetTemplates');
-                                                alert('Templates reset completely.');
+                                                const result = await runGAS('fixTemplateStructure');
+                                                alert(`Success! ${result.message}\nFields: ${result.fieldCount}`);
                                                 await loadTemplates();
                                             } catch (e) {
-                                                alert('Hard reset failed: ' + e);
+                                                alert('Fix failed: ' + e);
                                             }
                                         }
                                     }}
-                                    className="bg-red-500/20 text-red-200 border-red-500/30 hover:bg-red-500/30 ml-2"
+                                    className="bg-green-500/20 text-green-200 border-green-500/30 hover:bg-green-500/30 ml-2"
                                 >
-                                    Hard Reset
+                                    Fix Structure
                                 </Button>
                             </>
                         )}

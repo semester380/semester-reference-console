@@ -294,7 +294,7 @@ function handleApiRequest(e) {
     const publicEndpoints = [
       'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
       'submitReference', 'uploadReferenceDocument', 'getTemplates', 
-      'authorizeConsent', 'getDefaultTemplate',
+      'authorizeConsent', 'getDefaultTemplate', 'inspectTemplates',
       'verifyStaff'
     ];
     
@@ -302,7 +302,7 @@ function handleApiRequest(e) {
       'archiveRequests', 'unarchiveRequests', 'deleteRequests', 
       'runSmartChase', 'runAnalysis', 'listStaff', 'addStaff', 
       'updateStaff', 'deactivateStaff', 
-      'initializeDatabase', 'resetTemplates', 'sealRequest', 'diagnoseConfig', 'fixPermissions',
+      'initializeDatabase', 'resetTemplates', 'fixTemplateStructure', 'sealRequest', 'diagnoseConfig', 'fixPermissions',
       'runCompleteE2ETest', 'runQA', 'saveTemplate', 'deleteTemplate'
     ];
     
@@ -356,6 +356,9 @@ function handleApiRequest(e) {
       case 'getDefaultTemplate':
         result = { success: true, template: getDefaultTemplate() };
         break;
+      case 'inspectTemplates':
+        result = inspectTemplates();
+        break;
  
       case 'verifyStaff':
         // Require Admin Key even though it's in "public" list (to prevent scraping)
@@ -394,6 +397,9 @@ function handleApiRequest(e) {
         break;
       case 'resetTemplates':
         result = resetTemplates();
+        break;
+      case 'fixTemplateStructure':
+        result = fixTemplateStructure();
         break;
       case 'saveTemplate':
         result = saveTemplate(payload.templateName, payload.structureJSON, payload.templateId, staff);
