@@ -1,119 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button, Input } from './UI';
-
-// Template definitions with full field information
-const TEMPLATE_DEFINITIONS = {
-    'standard-social-care': {
-        name: 'Standard Social Care Reference',
-        description: 'Full reference with employment details, ratings, safeguarding Q&A, consent, and declaration',
-        sections: [
-            {
-                title: 'Employment Details',
-                fields: [
-                    { label: 'Date Started', type: 'date' },
-                    { label: 'Date Ended', type: 'date' },
-                    { label: 'Job Title', type: 'text' },
-                    { label: 'Reason for Leaving', type: 'textarea' },
-                    { label: 'Safeguarding concerns during employment?', type: 'yes/no' },
-                    { label: 'Subject to disciplinary action?', type: 'yes/no' },
-                ]
-            },
-            {
-                title: 'Ratings & Attributes',
-                fields: [
-                    { label: 'Suitable for Role', type: 'rating' },
-                    { label: 'Punctuality', type: 'rating' },
-                    { label: 'Attitude to Work', type: 'rating' },
-                    { label: 'Reliability', type: 'rating' },
-                    { label: 'Honesty & Integrity', type: 'rating' },
-                    { label: 'Initiative', type: 'rating' },
-                    { label: 'Communication Skills', type: 'rating' },
-                    { label: 'Further Information', type: 'textarea' },
-                ]
-            },
-            {
-                title: 'Safeguarding & Professional Judgement',
-                fields: [
-                    { label: 'Reservations about character/conduct?', type: 'yes/no' },
-                    { label: 'Should NOT be employed with vulnerable persons?', type: 'yes/no' },
-                    { label: 'Knowledge of Rehabilitation of Offenders Act?', type: 'yes/no' },
-                ]
-            },
-            {
-                title: 'Consent to Share',
-                fields: [
-                    { label: 'Happy to share with third-party clients?', type: 'yes/no' },
-                ]
-            },
-            {
-                title: 'Declaration',
-                fields: [
-                    { label: 'Full Name', type: 'text' },
-                    { label: 'Position/Title', type: 'text' },
-                    { label: 'Company', type: 'text' },
-                    { label: 'Telephone', type: 'text' },
-                    { label: 'Email', type: 'email' },
-                    { label: 'Digital Signature', type: 'signature' },
-                ]
-            },
-        ]
-    },
-    'basic-employment': {
-        name: 'Basic Employment Reference',
-        description: 'Simple employment verification with dates and job title',
-        sections: [
-            {
-                title: 'Employment Verification',
-                fields: [
-                    { label: 'Date Started', type: 'date' },
-                    { label: 'Date Ended', type: 'date' },
-                    { label: 'Job Title', type: 'text' },
-                    { label: 'Reason for Leaving', type: 'textarea' },
-                    { label: 'Would you re-employ?', type: 'yes/no' },
-                ]
-            },
-            {
-                title: 'Confirmation',
-                fields: [
-                    { label: 'Referee Name', type: 'text' },
-                    { label: 'Referee Position', type: 'text' },
-                    { label: 'Company', type: 'text' },
-                ]
-            },
-        ]
-    },
-    'character-reference': {
-        name: 'Character Reference',
-        description: 'Personal character reference for non-employment contexts',
-        sections: [
-            {
-                title: 'Relationship',
-                fields: [
-                    { label: 'How do you know the candidate?', type: 'textarea' },
-                    { label: 'How long have you known them?', type: 'text' },
-                ]
-            },
-            {
-                title: 'Character Assessment',
-                fields: [
-                    { label: 'Trustworthiness', type: 'rating' },
-                    { label: 'Reliability', type: 'rating' },
-                    { label: 'Communication', type: 'rating' },
-                    { label: 'Character Summary', type: 'textarea' },
-                ]
-            },
-            {
-                title: 'Confirmation',
-                fields: [
-                    { label: 'Your Name', type: 'text' },
-                    { label: 'Your Contact', type: 'text' },
-                ]
-            },
-        ]
-    },
-};
-
-type TemplateId = keyof typeof TEMPLATE_DEFINITIONS;
+import { runGAS } from '../lib/api';
+import type { Template, TemplateField } from '../types';
 
 interface NewRequestModalProps {
     isOpen: boolean;
@@ -129,10 +17,36 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({ isOpen, onClos
         refereeEmail: '',
     });
 
-    const [selectedTemplate, setSelectedTemplate] = useState<TemplateId>('standard-social-care');
+    const [templates, setTemplates] = useState<Template[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+    const [loading, setLoading] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
     const [complianceChecked, setComplianceChecked] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        if (isOpen) {
+            loadTemplates();
+        }
+    }, [isOpen]);
+
+    const loadTemplates = async () => {
+        setLoading(true);
+        try {
+            const result = await runGAS('getTemplates');
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const loaded: Template[] = Array.isArray(result) ? result : (result as any).data || [];
+
+            setTemplates(loaded);
+            if (loaded.length > 0 && !selectedTemplateId) {
+                setSelectedTemplateId(loaded[0].templateId);
+            }
+        } catch (error) {
+            console.error("Failed to load templates", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -173,16 +87,18 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({ isOpen, onClos
             return;
         }
 
-        onSubmit({ ...formData, templateId: selectedTemplate });
+        onSubmit({ ...formData, templateId: selectedTemplateId });
         onClose();
     };
 
-    const templateInfo = TEMPLATE_DEFINITIONS[selectedTemplate];
+    const selectedTemplate = templates.find(t => t.templateId === selectedTemplateId);
+
     const fieldTypeEmoji: Record<string, string> = {
         'date': '📅',
         'text': '✏️',
         'textarea': '📝',
         'rating': '⭐',
+        'boolean': '✅', // mapped from 'yes/no' or 'boolean'
         'yes/no': '✅',
         'email': '📧',
         'signature': '✍️',
@@ -207,57 +123,64 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({ isOpen, onClos
                             </label>
                             <div className="flex gap-2">
                                 <select
-                                    value={selectedTemplate}
+                                    value={selectedTemplateId}
                                     onChange={(e) => {
-                                        setSelectedTemplate(e.target.value as TemplateId);
+                                        setSelectedTemplateId(e.target.value);
                                         setShowPreview(false);
                                     }}
-                                    className="flex-1 px-3 py-2 border border-nano-gray-200 rounded-lg text-nano-gray-900 focus:ring-2 focus:ring-semester-blue focus:border-transparent"
+                                    disabled={loading}
+                                    className="flex-1 px-3 py-2 border border-nano-gray-200 rounded-lg text-nano-gray-900 focus:ring-2 focus:ring-semester-blue focus:border-transparent disabled:bg-gray-100"
                                 >
-                                    {Object.entries(TEMPLATE_DEFINITIONS).map(([id, template]) => (
-                                        <option key={id} value={id}>
-                                            {template.name}
-                                        </option>
-                                    ))}
+                                    {loading ? (
+                                        <option>Loading templates...</option>
+                                    ) : (
+                                        templates.map((t) => (
+                                            <option key={t.templateId} value={t.templateId}>
+                                                {t.name}
+                                            </option>
+                                        ))
+                                    )}
                                 </select>
                                 <button
                                     type="button"
                                     onClick={() => setShowPreview(!showPreview)}
+                                    disabled={!selectedTemplate}
                                     className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${showPreview
-                                            ? 'bg-semester-blue text-white border-semester-blue'
-                                            : 'bg-white text-semester-blue border-semester-blue hover:bg-semester-blue/10'
+                                        ? 'bg-semester-blue text-white border-semester-blue'
+                                        : 'bg-white text-semester-blue border-semester-blue hover:bg-semester-blue/10'
                                         }`}
                                 >
                                     {showPreview ? '✕ Hide' : '👁 Preview'}
                                 </button>
                             </div>
-                            <p className="text-xs text-nano-gray-500 mt-1">
-                                {templateInfo.description}
-                            </p>
+                            {selectedTemplate && (
+                                <p className="text-xs text-nano-gray-500 mt-1">
+                                    {selectedTemplate.structureJSON?.length || 0} fields
+                                </p>
+                            )}
                         </div>
 
                         {/* Template Preview */}
-                        {showPreview && (
+                        {showPreview && selectedTemplate && (
                             <div className="bg-nano-gray-50 p-4 rounded-lg border border-nano-gray-200 mb-4">
                                 <h3 className="text-sm font-semibold text-nano-gray-900 mb-3">
-                                    📋 Template Preview: {templateInfo.name}
+                                    📋 Template Preview: {selectedTemplate.name}
                                 </h3>
                                 <div className="space-y-3">
-                                    {templateInfo.sections.map((section, idx) => (
-                                        <div key={idx} className="bg-white p-3 rounded-md border border-nano-gray-100">
-                                            <h4 className="text-xs font-semibold text-semester-blue uppercase tracking-wide mb-2">
-                                                {section.title}
-                                            </h4>
-                                            <div className="grid grid-cols-2 gap-1">
-                                                {section.fields.map((field, fIdx) => (
-                                                    <div key={fIdx} className="text-xs text-nano-gray-600 flex items-center gap-1">
-                                                        <span>{fieldTypeEmoji[field.type] || '•'}</span>
-                                                        <span>{field.label}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                    <div className="bg-white p-3 rounded-md border border-nano-gray-100">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {selectedTemplate.structureJSON.map((field, fIdx) => (
+                                                <div key={fIdx} className="text-xs text-nano-gray-600 flex items-center gap-1">
+                                                    <span>{fieldTypeEmoji[field.type] || '•'}</span>
+                                                    <span>{field.label}</span>
+                                                    {field.required && <span className="text-status-error">*</span>}
+                                                </div>
+                                            ))}
+                                            {selectedTemplate.structureJSON.length === 0 && (
+                                                <div className="text-gray-400 italic text-xs col-span-2">No fields defined</div>
+                                            )}
                                         </div>
-                                    ))}
+                                    </div>
                                 </div>
                                 <p className="text-xs text-nano-gray-400 mt-3 text-center">
                                     This is what the referee will be asked to provide
@@ -330,8 +253,8 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({ isOpen, onClos
                         </Button>
                         <Button
                             type="submit"
-                            disabled={!complianceChecked || Object.values(errors).some(e => e)}
-                            className={!complianceChecked ? 'opacity-50 cursor-not-allowed' : ''}
+                            disabled={!complianceChecked || Object.values(errors).some(e => e) || !selectedTemplateId}
+                            className={!complianceChecked || !selectedTemplateId ? 'opacity-50 cursor-not-allowed' : ''}
                         >
                             Initiate Request
                         </Button>

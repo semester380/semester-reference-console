@@ -122,13 +122,19 @@ const TemplateBuilder: React.FC = () => {
             {/* Header */}
             <header className="bg-semester-blue border-b border-semester-blue-dark sticky top-0 z-10 shadow-md">
                 <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-                    <div>
-                        <Logo inverted={true} />
-                        <div className="flex items-center gap-2 mt-1 pl-10">
-                            <p className="text-sm text-blue-100">Template Builder</p>
-                            {!isTemplateAdmin && (
-                                <span className="bg-white/10 text-white text-xs px-2 py-0.5 rounded border border-white/20">Read Only</span>
-                            )}
+
+                    <div className="flex items-center gap-4">
+                        <Button variant="ghost" className="text-white hover:bg-white/10" onClick={() => window.location.href = '/'}>
+                            ← Back
+                        </Button>
+                        <div>
+                            <Logo inverted={true} />
+                            <div className="flex items-center gap-2 mt-1 pl-10">
+                                <p className="text-sm text-blue-100">Template Builder</p>
+                                {!isTemplateAdmin && (
+                                    <span className="bg-white/10 text-white text-xs px-2 py-0.5 rounded border border-white/20">Read Only</span>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="flex gap-3 items-center">
