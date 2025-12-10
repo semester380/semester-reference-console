@@ -15,6 +15,7 @@ interface AuthContextType {
     logout: () => void;
     isAuthenticated: boolean;
     isLoading: boolean;
+    debugLogin?: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -102,8 +103,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         userEmail: email
                     };
                     const script = document.createElement('script');
-                    // Hardcoded to v86 to ensure reliability (ignoring potentially stale Vercel envs)
-                    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbygQsFXzjXNVCz2v5kPrvKfhPnveHuDy27T32nocxs39C1zqdJ53BHqOGPEpl-vj1EH/exec';
+                    // Hardcoded to v91 to ensure reliability (ignoring potentially stale Vercel envs)
+                    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbxrai47UCuouzYrOkKWyX8jNhQMl2dUBbmY89GvMSzosQ98QKB2Ih-UpG_bAGHHhLLe/exec';
 
                     script.src = `${gasBaseUrl}?callback=${callbackId}&jsonPayload=${encodeURIComponent(JSON.stringify(payload))}`;
                     console.log('[Auth] Loading verifyStaff script with callback:', callbackId);
@@ -143,8 +144,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('src_user');
     };
 
+    const debugLogin = () => {
+        // Strict guard: Only allow in DEV mode
+        if (!import.meta.env.DEV) {
+            console.warn('[Auth] Debug logic blocked in production');
+            return;
+        }
+
+        const email = prompt("Enter Dev Email (rob@semester.co.uk or nicola@semester.co.uk):", "rob@semester.co.uk");
+        if (!email) return;
+
+        if (email !== 'rob@semester.co.uk' && email !== 'nicola@semester.co.uk') {
+            alert('Dev Access Denied: restricted to rob/nicola only.');
+            return;
+        }
+
+        const dummyUser: User = {
+            email: email,
+            name: email.split('@')[0] + ' (Dev)',
+            picture: 'https://via.placeholder.com/150',
+            role: 'Admin'
+        };
+        setUser(dummyUser);
+        localStorage.setItem('src_user', JSON.stringify(dummyUser));
+        setIsLoading(false);
+        window.location.reload(); // Force reload to pick up auth state
+    };
+
     return (
-        <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, isLoading }}>
+        <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, isLoading, debugLogin }}>
             {children}
         </AuthContext.Provider>
     );

@@ -71,7 +71,7 @@ const ProtectedApp: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || (import.meta.env.DEV ? "mock-client-id" : "");
 
   if (!clientId) {
     return (

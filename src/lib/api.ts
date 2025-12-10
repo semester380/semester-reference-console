@@ -196,8 +196,8 @@ const mockGAS = {
 export const runGAS = (functionName: string, ...args: unknown[]) => {
     return new Promise((resolve, reject) => {
         const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-        // Live GAS Deployment ID (v86 - Template Builder CRUD)
-        const GAS_DEPLOYMENT_ID = 'AKfycbygQsFXzjXNVCz2v5kPrvKfhPnveHuDy27T32nocxs39C1zqdJ53BHqOGPEpl-vj1EH';
+        // Live GAS Deployment ID (v91 - Template Builder v91 - SECURE PROD)
+        const GAS_DEPLOYMENT_ID = 'AKfycbxrai47UCuouzYrOkKWyX8jNhQMl2dUBbmY89GvMSzosQ98QKB2Ih-UpG_bAGHHhLLe';
         const gasBaseUrl = `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
 
         if (useMocks) {
@@ -387,7 +387,7 @@ export const runGASCallback = (
     onError: (error: any) => void
 ) => {
     const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbygQsFXzjXNVCz2v5kPrvKfhPnveHuDy27T32nocxs39C1zqdJ53BHqOGPEpl-vj1EH/exec';
+    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbxrai47UCuouzYrOkKWyX8jNhQMl2dUBbmY89GvMSzosQ98QKB2Ih-UpG_bAGHHhLLe/exec';
 
     if (useMocks) {
         console.log(`[GAS Mock] Calling ${functionName} with:`, params);

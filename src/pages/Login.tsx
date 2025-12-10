@@ -31,6 +31,20 @@ export default function LoginPage() {
                             >
                                 {isLoading ? 'Signing in...' : 'Sign in with Google'}
                             </button>
+
+                            {/* Dev Login - Restricted to Local Development Only */}
+                            {import.meta.env.DEV && (
+                                <button
+                                    onClick={() => {
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        const auth = useAuth() as any;
+                                        if (auth.debugLogin) auth.debugLogin();
+                                    }}
+                                    className="mt-2 w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 mb-4"
+                                >
+                                    🔧 Dev Login
+                                </button>
+                            )}
                         </div>
 
                         <div className="relative">
