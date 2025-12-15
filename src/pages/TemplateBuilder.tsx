@@ -19,13 +19,15 @@ const TemplateBuilder: React.FC = () => {
 
     const [templates, setTemplates] = useState<Template[]>([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+    const [rawDebug, setRawDebug] = useState<unknown>('No Data Yet');
 
     // Load templates on mount
     const loadTemplates = useCallback(async () => {
-        alert('DEBUG: Starting loadTemplates...');
+        // alert('DEBUG: Starting loadTemplates...');
         try {
             const result = await runGAS('getTemplates');
-            alert('DEBUG: Got result: ' + JSON.stringify(result));
+            setRawDebug(result);
+            // alert('DEBUG: Got result: ' + JSON.stringify(result));
             // ...
 
             // Check if result is the array or the response wrapper
@@ -33,7 +35,7 @@ const TemplateBuilder: React.FC = () => {
             const loadedTemplates = Array.isArray(result) ? result : (result as any).data || [];
 
             setTemplates(loadedTemplates);
-            alert('Debug Success: Found ' + loadedTemplates.length + ' templates. First: ' + (loadedTemplates[0]?.name || 'N/A') + '\nRaw: ' + JSON.stringify(result));
+            // alert('Debug Success: Found ' + loadedTemplates.length + ' templates. First: ' + (loadedTemplates[0]?.name || 'N/A') + '\nRaw: ' + JSON.stringify(result));
 
             // HELPFUL DEBUG & AUTO-REPAIR
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,7 +45,8 @@ const TemplateBuilder: React.FC = () => {
             }
         } catch (error) {
             console.error("Failed to load templates", error);
-            alert('DEBUG ERROR: Failed to load templates. ' + error);
+            setRawDebug({ ERROR: 'Load Failed', details: error });
+            // alert('DEBUG ERROR: Failed to load templates. ' + error);
         }
     }, [selectedTemplateId]);
 
@@ -489,8 +492,9 @@ const TemplateBuilder: React.FC = () => {
                     <p>Template Count: {templates.length}</p>
                     <p>Selected ID: {selectedTemplateId}</p>
                     <p>Is Admin: {isTemplateAdmin ? 'YES' : 'NO'}</p>
-                    <p>Last Result: {JSON.stringify(templates.map(t => t.name))}</p>
-                    <p>Full Data: {JSON.stringify(templates).substring(0, 500)}...</p>
+                    <p>Raw Result (Type): {typeof rawDebug}</p>
+                    <p>Raw Result (Value): {JSON.stringify(rawDebug).substring(0, 1000)}</p>
+                    <p>Templates State: {JSON.stringify(templates.map(t => t.name))}</p>
                 </div>
 
                 {/* Desktop Preview */}
