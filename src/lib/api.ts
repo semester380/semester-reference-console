@@ -193,7 +193,8 @@ const mockGAS = {
 /**
  * Generic runner for GAS functions
  */
-// Helper for on-screen logging
+
+// Helper for on-screen logging (PRODUCTION DEBUG TOOL)
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const debugLog = (msg: string) => {
     console.log('[API DEBUG] ' + msg);
@@ -215,16 +216,19 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
     debugLog(`runGAS called: ${functionName}`);
     return new Promise((resolve, reject) => {
         const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-        // Production v96
+        // Production v96 - SECURE + TEMPLATE SEEDED + RBAC
         const GAS_DEPLOYMENT_ID = 'AKfycbzH8Cbgot_NYyEY0E_Mj19xkNDv67o81b3wXCU_jYOODAKIMmJQb3q8ciujoaF0zVve';
         const gasBaseUrl = `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
 
         if (useMocks) {
+            // Local development mock
             console.log(`[GAS Mock] Calling ${functionName} with:`, args);
-            if (mockGAS[functionName as keyof typeof mockGAS]) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if ((mockGAS as any)[functionName]) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (mockGAS[functionName as keyof typeof mockGAS] as any)(...args).then(resolve).catch(reject);
+                ((mockGAS as any)[functionName])(...args).then(resolve).catch(reject);
             } else {
+                console.warn(`[GAS Mock] Function ${functionName} not implemented`);
                 resolve({ success: true, message: 'Mock Success' });
             }
             return;
@@ -235,6 +239,7 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
         const jsonPayload = JSON.stringify({
             action: functionName,
             ...argsMap,
+            // Add admin key if needed (simulated for auth context)
             adminKey: 'uO4KpB7Zx9qL1Fs8cYp3rN5wD2mH6vQ0TgE9jS4aB8kR1nC5uL7zX2pY6'
         });
 
@@ -276,7 +281,7 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
         script.onerror = () => {
             debugLog('SCRIPT ERROR event fired');
             cleanup();
-            reject(new Error('Script load failed'));
+            reject(new Error('Script load failed (Network/Blocking)'));
         };
         script.onload = () => { debugLog('Script onload'); };
 
@@ -291,137 +296,6 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
         }, 30000);
     });
 };
-return new Promise((resolve, reject) => {
-    const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-    // Production v96 - SECURE + TEMPLATE SEEDED + RBAC
-    const GAS_DEPLOYMENT_ID = 'AKfycbzH8Cbgot_NYyEY0E_Mj19xkNDv67o81b3wXCU_jYOODAKIMmJQb3q8ciujoaF0zVve';
-    const gasBaseUrl = `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
-
-    if (useMocks) {
-        // Local development mock
-        console.log(`[GAS Mock] Calling ${functionName} with:`, args);
-        if (mockGAS[functionName as keyof typeof mockGAS]) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (mockGAS[functionName as keyof typeof mockGAS] as any)(...args).then(resolve).catch(reject);
-        } else {
-            console.warn(`[GAS Mock] Function ${functionName} not implemented`);
-            resolve({ success: true });
-        }
-    } else if (gasBaseUrl) {
-        // Live GAS backend via HTTP
-        console.log(`[GAS Live] Calling ${functionName} with:`, args);
-
-        // Convert args to payload object
-        const payload: Record<string, unknown> = { action: functionName };
-
-        // Inject Auth Credentials
-        // Inject Auth Credentials (SKIP for public endpoints)
-        const PUBLIC_ENDPOINTS = [
-            'healthCheck',
-            'processCandidateConsent',
-            'validateRefereeToken',
-            'submitReference',
-            'uploadReferenceDocument',
-            'getTemplates',
-            'authorizeConsent',
-            'getDefaultTemplate'
-        ];
-
-        const requiresAuth = !PUBLIC_ENDPOINTS.includes(functionName);
-
-        // Special case: verifyStaff is public (pre-auth) but requires adminKey
-        const requiresAdminKey = requiresAuth || functionName === 'verifyStaff';
-
-        if (requiresAdminKey) {
-            const adminKey = import.meta.env.VITE_ADMIN_API_KEY;
-            if (adminKey) payload.adminKey = adminKey;
-        }
-
-        if (requiresAuth) {
-            const storedUser = localStorage.getItem('src_user');
-            if (storedUser) {
-                try {
-                    const user = JSON.parse(storedUser);
-                    if (user && user.email) {
-                        payload.userEmail = user.email;
-                    }
-                } catch (e) {
-                    console.error('Failed to parse stored user for auth injection', e);
-                }
-            }
-        }
-
-        if (args.length === 1 && typeof args[0] === 'object' && !Array.isArray(args[0])) {
-            Object.assign(payload, args[0]);
-        } else if (args.length === 1 && typeof args[0] === 'string') {
-            // Single primitive argument
-            if (functionName === 'sealRequest' || functionName === 'getRequest' || functionName === 'getAuditTrail' || functionName === 'runAnalysis') {
-                payload.requestId = args[0];
-                return;
-            }
-
-            // Construct payload
-            const argsMap = args[0] as Record<string, unknown> || {};
-            const jsonPayload = JSON.stringify({
-                action: functionName,
-                ...argsMap,
-                // Add admin key if needed (simulated for auth context)
-                adminKey: 'uO4KpB7Zx9qL1Fs8cYp3rN5wD2mH6vQ0TgE9jS4aB8kR1nC5uL7zX2pY6'
-            });
-
-            // JSONP Implementation
-            const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-            debugLog(`Generated: ${callbackName}`);
-
-            const separator = gasBaseUrl.includes('?') ? '&' : '?';
-            const url = `${gasBaseUrl}${separator}action=${encodeURIComponent(functionName)}&callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
-            debugLog(`URL: ${url.substring(0, 100)}...`);
-
-            // Cleanup
-            let timeoutId: number;
-            const cleanup = () => {
-                delete (window as any)[callbackName];
-                const script = document.getElementById(callbackName);
-                if (script) script.remove();
-                if (timeoutId) clearTimeout(timeoutId);
-            };
-
-            // Callback
-            (window as any)[callbackName] = (response: any) => {
-                debugLog(`CALLBACK FIRED! Success: ${response?.success}`);
-                cleanup();
-                if (response && response.success) {
-                    resolve(response);
-                } else {
-                    debugLog(`Callback Error: ${JSON.stringify(response)}`);
-                    reject(response?.error || 'Unknown error from GAS');
-                }
-            };
-
-            // Script creation
-            const script = document.createElement('script');
-            script.src = url;
-            script.id = callbackName;
-            script.onerror = (error) => {
-                debugLog('SCRIPT ERROR event fired');
-                cleanup();
-                reject(new Error('Script load failed (Network/Blocking)'));
-            };
-            script.onload = () => {
-                debugLog('Script onload fired');
-            };
-
-            document.body.appendChild(script);
-            debugLog('Script appended');
-
-            // Timeout
-            timeoutId = window.setTimeout(() => {
-                debugLog('TIMEOUT reached');
-                cleanup();
-                reject(new Error(`Timeout waiting for ${functionName}`));
-            }, 30000);
-        });
-};
 
 /**
  * Callback-based runner for GAS functions to bypass Promise resolution issues
@@ -435,92 +309,5 @@ export const runGASCallback = (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => void
 ) => {
-    const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbzH8Cbgot_NYyEY0E_Mj19xkNDv67o81b3wXCU_jYOODAKIMmJQb3q8ciujoaF0zVve/exec';
-
-    if (useMocks) {
-        console.log(`[GAS Mock] Calling ${functionName} with:`, params);
-        if (mockGAS[functionName as keyof typeof mockGAS]) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (mockGAS[functionName as keyof typeof mockGAS] as any)(params)
-                .then(onSuccess)
-                .catch(onError);
-        } else {
-            console.warn(`[GAS Mock] Function ${functionName} not implemented`);
-            onSuccess({ success: true });
-        }
-        return;
-    }
-
-    if (!gasBaseUrl) {
-        onError(new Error('GAS backend URL not configured'));
-        return;
-    }
-
-    console.log(`[GAS Live Callback] Calling ${functionName} with:`, params);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const payload: any = { action: functionName };
-
-    // Inject Auth/Admin Key
-    const PUBLIC_ENDPOINTS = [
-        'healthCheck', 'processCandidateConsent', 'validateRefereeToken',
-        'submitReference', 'uploadReferenceDocument', 'getTemplates',
-        'authorizeConsent', 'getDefaultTemplate'
-    ];
-
-    if (!PUBLIC_ENDPOINTS.includes(functionName) || functionName === 'verifyStaff') {
-        payload.adminKey = import.meta.env.VITE_ADMIN_API_KEY;
-        const storedUser = localStorage.getItem('src_user');
-        if (storedUser) {
-            try {
-                const user = JSON.parse(storedUser);
-                if (user?.email) payload.userEmail = user.email;
-            } catch { /* ignore */ }
-        }
-    }
-
-    // Merge params
-    if (params) {
-        // Handle different param types similar to runGAS if needed, 
-        // but typically params is just an object to merge
-        Object.assign(payload, params);
-    }
-
-    console.log('[GAS Live Callback] Payload:', JSON.stringify(payload, null, 2));
-
-    const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any)[callbackName] = (response: any) => {
-        console.log(`[GAS Live Callback] ${callbackName} EXECUTED`, response);
-        cleanup();
-
-        if (response && response.success) {
-            onSuccess(response);
-        } else {
-            console.error(`[GAS Live Callback] Error:`, response);
-            onError(response?.error || 'Unknown error');
-        }
-    };
-
-    // Construct URL
-    const jsonPayload = JSON.stringify(payload);
-    const script = document.createElement('script');
-    const separator = gasBaseUrl.includes('?') ? '&' : '?';
-    script.src = `${gasBaseUrl}${separator}callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
-
-    script.onerror = (err) => {
-        cleanup();
-        console.error(`[GAS Live Callback] Script load error:`, err);
-        onError('Failed to load GAS script');
-    };
-
-    document.body.appendChild(script);
-
-    function cleanup() {
-        // @ts-expect-error - dynamic delete
-        delete window[callbackName];
-        if (script.parentNode) script.parentNode.removeChild(script);
-    }
+    runGAS(functionName, params).then(onSuccess).catch(onError);
 };
