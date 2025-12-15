@@ -387,7 +387,7 @@ export const runGASCallback = (
     onError: (error: any) => void
 ) => {
     const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbxrai47UCuouzYrOkKWyX8jNhQMl2dUBbmY89GvMSzosQ98QKB2Ih-UpG_bAGHHhLLe/exec';
+    const gasBaseUrl = 'https://script.google.com/macros/s/AKfycbzH8Cbgot_NYyEY0E_Mj19xkNDv67o81b3wXCU_jYOODAKIMmJQb3q8ciujoaF0zVve/exec';
 
     if (useMocks) {
         console.log(`[GAS Mock] Calling ${functionName} with:`, params);
