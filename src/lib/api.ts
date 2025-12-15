@@ -194,34 +194,15 @@ const mockGAS = {
  * Generic runner for GAS functions
  */
 
-// Helper for on-screen logging (PRODUCTION DEBUG TOOL)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const debugLog = (msg: string) => {
-    console.log('[API DEBUG] ' + msg);
-    try {
-        let div = document.getElementById('api-debug-log');
-        if (!div) {
-            div = document.createElement('div');
-            div.id = 'api-debug-log';
-            div.style.cssText = 'position:fixed;bottom:0;right:0;width:400px;height:300px;background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:10px;overflow:auto;z-index:999999;pointer-events:none;padding:10px;';
-            document.body.appendChild(div);
-        }
-        const line = document.createElement('div');
-        line.innerText = new Date().toISOString().split('T')[1].slice(0, -1) + ': ' + msg;
-        div.prepend(line);
-    } catch (e) { /* ignore */ }
-};
+// Production v96 - SECURE + TEMPLATE SEEDED + RBAC
+const GAS_DEPLOYMENT_ID = 'AKfycbzH8Cbgot_NYyEY0E_Mj19xkNDv67o81b3wXCU_jYOODAKIMmJQb3q8ciujoaF0zVve';
+const gasBaseUrl = `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
 
 export const runGAS = (functionName: string, ...args: unknown[]) => {
-    debugLog(`runGAS called: ${functionName}`);
     return new Promise((resolve, reject) => {
         const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-        // Production v96 - SECURE + TEMPLATE SEEDED + RBAC
-        const GAS_DEPLOYMENT_ID = 'AKfycbzH8Cbgot_NYyEY0E_Mj19xkNDv67o81b3wXCU_jYOODAKIMmJQb3q8ciujoaF0zVve';
-        const gasBaseUrl = `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
 
         if (useMocks) {
-            // Local development mock
             console.log(`[GAS Mock] Calling ${functionName} with:`, args);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             if ((mockGAS as any)[functionName]) {
@@ -245,11 +226,9 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
 
         // JSONP Implementation
         const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-        debugLog(`Generated: ${callbackName}`);
 
         const separator = gasBaseUrl.includes('?') ? '&' : '?';
         const url = `${gasBaseUrl}${separator}action=${encodeURIComponent(functionName)}&callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
-        debugLog(`URL: ${url.substring(0, 100)}...`);
 
         // Cleanup
         let timeoutId: number;
@@ -264,12 +243,11 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
         // Callback
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any)[callbackName] = (response: any) => {
-            debugLog(`CALLBACK FIRED! Success: ${response?.success}`);
             cleanup();
             if (response && response.success) {
                 resolve(response);
             } else {
-                debugLog(`Error: ${JSON.stringify(response)}`);
+                console.error('GAS Error:', response);
                 reject(response?.error || 'Unknown error');
             }
         };
@@ -279,18 +257,14 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
         script.src = url;
         script.id = callbackName;
         script.onerror = () => {
-            debugLog('SCRIPT ERROR event fired');
             cleanup();
             reject(new Error('Script load failed (Network/Blocking)'));
         };
-        script.onload = () => { debugLog('Script onload'); };
 
         document.body.appendChild(script);
-        debugLog('Script appended');
 
         // Timeout
         timeoutId = window.setTimeout(() => {
-            debugLog('TIMEOUT reached');
             cleanup();
             reject(new Error(`Timeout waiting for ${functionName}`));
         }, 30000);
