@@ -245,7 +245,8 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any)[callbackName] = (response: any) => {
             cleanup();
-            if (response && response.success) {
+            // Allow success=undefined (legacy/simple functions) or success=true
+            if (response && response.success !== false) {
                 resolve(response);
             } else {
                 console.error('GAS Error:', response);
