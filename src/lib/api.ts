@@ -335,7 +335,8 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
                 const script = document.createElement('script');
                 // Use '?' if no query params yet, else '&' (gasBaseUrl usually ends with /exec)
                 const separator = gasBaseUrl.includes('?') ? '&' : '?';
-                const url = `${gasBaseUrl}${separator}callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
+                // ROB FIX: Explicitly add action param to URL to ensure backend routing works even if jsonPayload parsing fails
+                const url = `${gasBaseUrl}${separator}action=${encodeURIComponent(functionName)}&callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
                 console.log(`[GAS Live] Loading script:`, url);
                 script.src = url;
 
