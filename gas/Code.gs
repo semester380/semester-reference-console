@@ -294,6 +294,10 @@ function handleApiRequest(e) {
     const publicEndpoints = [
       'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
       'submitReference', 'uploadReferenceDocument', 'getTemplates', 
+      'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
+      'submitReference', 'uploadReferenceDocument', 'getTemplates', 
+      'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
+      'submitReference', 'uploadReferenceDocument', 'getTemplates', 
       'authorizeConsent', 'getDefaultTemplate', 'inspectTemplates',
       'verifyStaff'
     ];

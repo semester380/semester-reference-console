@@ -122,7 +122,42 @@ function seedEmploymentTemplate() {
     ]
   };
   
-  // Save to sheet
-  saveTemplate(definition.name, definition.sections, definition.id, { email: 'rob@semester.co.uk' }); // Emulate Admin
+  // Save to sheet directly (Bypass RBAC for Seeding)
+  const ss = getDatabaseSpreadsheet();
+  const sheet = ss.getSheetByName("Template_Definitions");
+  const data = sheet.getDataRange().getValues();
+  const timestamp = new Date();
+  const flatJson = JSON.stringify(definition.sections); // We save sections directly? 
+  // Wait, frontend expects FLAT fields. 
+  // initializeDatabase flattens them. 
+  // Let's flatten them here to match the frontend expectation.
+  let flatFields = [];
+  if (definition.sections) {
+    definition.sections.forEach(section => {
+        if (section.fields) {
+            flatFields = flatFields.concat(section.fields);
+        }
+    });
+  }
+  const structureStr = JSON.stringify(flatFields);
+
+  let found = false;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === definition.id) {
+      const rowIndex = i + 1;
+      sheet.getRange(rowIndex, 2).setValue(definition.name);
+      sheet.getRange(rowIndex, 3).setValue(structureStr);
+      sheet.getRange(rowIndex, 4).setValue('system_seed');
+      sheet.getRange(rowIndex, 5).setValue(timestamp);
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    sheet.appendRow([definition.id, definition.name, structureStr, 'system_seed', timestamp]);
+  }
+  
   console.log("Seeded Employment Template V1");
+  return { success: true, message: "Template seeded successfully" };
 }

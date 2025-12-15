@@ -197,7 +197,7 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
     return new Promise((resolve, reject) => {
         const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
         // Production v96 - SECURE + TEMPLATE SEEDED + RBAC
-        const GAS_DEPLOYMENT_ID = 'AKfycbw_bRkR4pDtIDtQv2mP8bSoB1ZqQDSkOVndaEgfluA8QEPf-9azWjb7L6-BVHHGsAtb';
+        const GAS_DEPLOYMENT_ID = 'AKfycbzH8Cbgot_NYyEY0E_Mj19xkNDv67o81b3wXCU_jYOODAKIMmJQb3q8ciujoaF0zVve';
         const gasBaseUrl = `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
 
         if (useMocks) {
