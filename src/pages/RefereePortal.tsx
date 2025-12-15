@@ -1,8 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
+import { Card, Button, Input, Badge, Loader } from '../components/UI';
 import { DynamicForm } from '../components/DynamicForm';
-import { Card, Loader } from '../components/UI';
 import { Logo } from '../components/Logo';
 import { runGAS } from '../lib/api';
+import { Header } from '../components/Header';
+import { SignaturePadField } from '../components/SignaturePadField';
 import type { Template } from '../types';
 
 const RefereePortal: React.FC = () => {
@@ -207,22 +210,27 @@ const RefereePortal: React.FC = () => {
 
     if (isSuccess) {
         return (
-            <div className="min-h-screen bg-nano-gray-50 flex items-center justify-center p-6">
-                <Card className="max-w-md w-full text-center py-12 shadow-lg rounded-2xl border-t-4 border-semester-blue">
-                    <div className="text-5xl mb-6">✅</div>
-                    <h2 className="text-2xl font-bold text-nano-gray-900 mb-3">Reference Submitted</h2>
-                    <p className="text-nano-gray-600 leading-relaxed px-6">
-                        Thank you for providing a reference for <strong className="text-nano-gray-900">{candidateName}</strong>.
-                        Your input has been securely recorded.
-                    </p>
-                </Card>
+            <div className="min-h-screen bg-gray-50/50 font-sans text-gray-900 selection:bg-semester-blue/20">
+                <Header simple />
+                <main className="max-w-3xl mx-auto px-4 py-12">
+                    <Card className="w-full text-center py-12 shadow-lg rounded-2xl border-t-4 border-semester-blue">
+                        <div className="text-5xl mb-6">✅</div>
+                        <h2 className="text-2xl font-bold text-nano-gray-900 mb-3">Reference Submitted</h2>
+                        <p className="text-nano-gray-600 leading-relaxed px-6">
+                            Thank you for providing a reference for <strong className="text-nano-gray-900">{candidateName}</strong>.
+                            Your input has been securely recorded.
+                        </p>
+                    </Card>
+                </main>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-nano-gray-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
-            <div className="max-w-2xl mx-auto">
+        <div className="min-h-screen bg-gray-50/50 font-sans text-gray-900 selection:bg-semester-blue/20">
+            <Header simple />
+
+            <main className="max-w-3xl mx-auto px-4 py-12">
                 {/* Header */}
                 <div className="flex flex-col items-center mb-10">
                     <Logo variant="mark" className="mb-6 scale-125" />
@@ -415,7 +423,7 @@ const RefereePortal: React.FC = () => {
                         Securely processed in compliance with GDPR.
                     </p>
                 </div>
-            </div>
+            </main>
         </div>
     );
 };

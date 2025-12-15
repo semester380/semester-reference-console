@@ -26,8 +26,18 @@
       align-items: center;
       margin-bottom: 20px;
       padding-bottom: 15px;
-      border-bottom: 3px solid #0052CC;
-      /* Semester Blue */
+      position: relative;
+    }
+
+    .header::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #0052CC 0%, #5E17EB 50%, #FF0080 100%);
+      border-radius: 2px;
     }
 
     .logo {
@@ -316,7 +326,8 @@
 
   <div class="footer">
     <div class="footer-content">
-      0161 419 9285 • <a href="mailto:info@semester.co.uk">info@semester.co.uk</a> • <a href="https://semester.co.uk">semester.co.uk</a> • Cedars Business Centre, Pontefract WF9 4PU
+      0161 419 9285 • <a href="mailto:info@semester.co.uk">info@semester.co.uk</a> • <a
+        href="https://semester.co.uk">semester.co.uk</a> • Cedars Business Centre, Pontefract WF9 4PU
     </div>
   </div>
 </body>

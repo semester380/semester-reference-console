@@ -1669,80 +1669,7 @@ function generatePDF(requestId, request) {
 
 // --- Email & Alert Helpers ---
 
-function sendBrandedEmail(recipient, subject, content) {
-  // SVG Logo (Basic shapes for email client compatibility - using images is better but SVG text works in some)
-  // For maximum compatibility in emails, we should use a public image URL if possible. 
-  // Since we don't have one, we will use a simple text header with brand colors and a 'Semester' label.
-  // Advanced: we could inline a base64 png, but Gmail blocks it often.
-  // Best approach: Clean minimal header.
-  
-  const htmlBody = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f3f4f6; }
-        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
-        .header { background-color: #ffffff; padding: 24px 32px; border-bottom: 3px solid #0052CC; display: flex; align-items: center; gap: 10px; }
-        .logo-circle { width: 16px; height: 16px; background-color: #0052CC; border-radius: 50%; display: inline-block; }
-        .brand-name { font-size: 20px; font-weight: bold; color: #111827; display: inline-block; vertical-align: middle; margin-left: 8px; }
-        .content { padding: 40px 32px; color: #374151; font-size: 16px; line-height: 1.6; }
-        .footer { background-color: #f9fafb; padding: 32px; text-align: center; border-top: 1px solid #e5e7eb; }
-        .footer-text { font-size: 12px; color: #6b7280; line-height: 1.5; }
-        a.button { display: inline-block; background-color: #0052CC; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; }
-        a.button:hover { background-color: #5E17EB; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <span class="logo-circle"></span>
-          <span class="brand-name">Semester</span>
-        </div>
-        <div class="content">
-          ${content}
-        </div>
-        <div class="footer">
-          <p class="footer-text">
-            <strong>Semester Reference Console</strong><br/>
-            Secure, efficient reference management.<br/><br/>
-            &copy; ${new Date().getFullYear()} Semester Ltd.<br/>
-            <a href="https://semester.co.uk" style="color: #0052CC; text-decoration: none;">semester.co.uk</a>
-          </p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-  
-  GmailApp.sendEmail(recipient, subject, '', { htmlBody: htmlBody });
-}
 
-function sendErrorAlert(context, error) {
-
-  try {
-    const recipients = 'rob@semester.co.uk'; // Configurable
-    const subject = 'Semester Reference Console – Error Alert';
-    const htmlBody = `
-      <div style="font-family: monospace; padding: 20px; background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px;">
-        <h2 style="color: #991b1b; margin-top: 0;">System Error Detected</h2>
-        <p><strong>Context:</strong> ${context}</p>
-        <p><strong>Time:</strong> ${new Date().toISOString()}</p>
-        <div style="background-color: #ffffff; padding: 15px; border-radius: 4px; border: 1px solid #e5e7eb; margin-top: 15px;">
-           <strong>Error Details:</strong><br/>
-           <pre style="white-space: pre-wrap;">${error.toString()}</pre>
-           ${error.stack ? '<br/><strong>Stack:</strong><br/><pre style="white-space: pre-wrap;">' + error.stack + '</pre>' : ''}
-        </div>
-      </div>
-    `;
-    
-    GmailApp.sendEmail(recipients, subject, '', { htmlBody: htmlBody });
-    console.log("Error alert sent to " + recipients);
-    
-  } catch (alertError) {
-    console.error("Failed to send error alert: " + alertError.toString());
-  }
-}
 
 function sendReferenceCompletedNotification(requestId, method) {
   try {
@@ -2136,13 +2063,4 @@ function getAuditTrail(requestId) {
 /**
  * Send critical error alert to admin
  */
-function sendErrorAlert(context, error) {
-  const adminEmail = Session.getEffectiveUser().getEmail();
-  if (adminEmail) {
-    MailApp.sendEmail({
-      to: adminEmail,
-      subject: `CRITICAL ERROR: ${context}`,
-      body: `Error details:\n\n${error.toString()}\n\nStack:\n${error.stack || 'No stack trace'}`
-    });
-  }
-}
+

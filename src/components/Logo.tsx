@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface LogoProps {
     className?: string;
@@ -7,11 +7,31 @@ interface LogoProps {
 }
 
 export const Logo: React.FC<LogoProps> = ({ className = '', variant = 'full', inverted = false }) => {
+    // Colors from brand: Blue #0052CC, Plum #5E17EB, Pink #FF0080
+    const [imgError, setImgError] = useState(false);
+
+    if (!imgError) {
+        return (
+            <div className={`flex items-center gap-3 ${className}`}>
+                <img
+                    src="/semester-logo.png"
+                    alt="Semester Recruitment"
+                    className={`h-10 w-auto object-contain ${inverted ? 'brightness-0 invert' : ''}`}
+                    onError={() => setImgError(true)}
+                />
+            </div>
+        );
+    }
+
+    // Fallback SVG (Nano Banana Pro style) similar to the visual identity
     return (
         <div className={`flex items-center gap-2 ${className}`}>
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* Semester Blue Circle */}
                 <circle cx="16" cy="16" r="16" fill={inverted ? "#FFFFFF" : "#0052CC"} />
+                {/* Plum Shape */}
                 <path d="M16 6C10.4772 6 6 10.4772 6 16C6 21.5228 10.4772 26 16 26V6Z" fill={inverted ? "#0052CC" : "#5E17EB"} />
+                {/* Pink Dot */}
                 <circle cx="22" cy="10" r="3" fill="#FF0080" />
             </svg>
             {variant === 'full' && (

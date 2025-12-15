@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button } from '../components/UI';
+import { Card, Button, Badge, Loader } from '../components/UI';
 import { NewRequestModal } from '../components/NewRequestModal';
 import { RequestList } from '../components/RequestList';
 import { ReferenceViewer } from '../components/ReferenceViewer';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { Logo } from '../components/Logo';
+import { Header } from '../components/Header';
 import { runGAS, runGASCallback } from '../lib/api';
 import type { Request } from '../types';
 
@@ -250,26 +250,14 @@ const Dashboard: React.FC = () => {
             )}
 
             {/* Header */}
-            <header className="bg-semester-blue border-b border-semester-blue-dark sticky top-0 z-10 shadow-md">
-                <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                        <Logo inverted={true} />
-                        <div className="h-6 w-px bg-semester-blue-light mx-2"></div>
-                        <span className="text-sm font-medium text-blue-100">Reference Console</span>
-                    </div>
-                    <div className="flex gap-3">
-                        <Button variant="secondary" className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:border-white/40" onClick={() => window.location.href = '?view=builder'}>
-                            Template Builder
-                        </Button>
-                        <Button onClick={() => setIsModalOpen(true)} className="bg-white text-semester-blue hover:bg-blue-50 font-semibold shadow-sm border-none">
-                            + New Request
-                        </Button>
-                        <Button variant="secondary" className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:border-white/40" onClick={logout}>
-                            Sign Out
-                        </Button>
-                    </div>
-                </div>
-            </header>
+            <Header user={user} onSignOut={logout}>
+                <Button
+                    onClick={() => setIsModalOpen(true)}
+                    className="bg-semester-blue text-white hover:bg-semester-blue-dark font-medium shadow-sm border-none flex items-center gap-2"
+                >
+                    <span className="text-lg leading-none">+</span> New Request
+                </Button>
+            </Header>
 
             {/* Main Content */}
             <main className="max-w-7xl mx-auto px-6 py-8">

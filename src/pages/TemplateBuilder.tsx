@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Button, Input } from '../components/UI';
+import { Card, Button, Input, Badge, Loader } from '../components/UI';
 import { DynamicForm } from '../components/DynamicForm';
 import { runGAS } from '../lib/api';
-import { Logo } from '../components/Logo';
+import { Header } from '../components/Header';
 import type { TemplateField, Template } from '../types';
 
 import { useAuth } from '../context/AuthContext';
@@ -166,105 +166,87 @@ const TemplateBuilder: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-nano-gray-50 flex flex-col font-sans">
+        <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
             {/* Maintenance Banner */}
             {isMaintenanceMode && isTemplateAdmin && (
                 <div className="bg-red-600 text-white text-xs font-bold text-center py-1 uppercase tracking-wider">
                     ⚠️ Maintenance Mode Active - Use Tools With Caution ⚠️
                 </div>
             )}
+            <Header user={user} onSignOut={logout}>
+                <div className="flex items-center gap-4">
+                    {/* Back to Dashboard */}
+                    <Button variant="ghost" className="hidden sm:inline-flex text-nano-gray-500 hover:text-nano-gray-900" onClick={() => window.location.href = '/'}>
+                        ← Dashboard
+                    </Button>
 
-            {/* Header */}
-            <header className="bg-semester-blue border-b border-semester-blue-dark sticky top-0 z-30 shadow-md">
-                <div className="max-w-7xl mx-auto px-6 py-3 flex justify-between items-center h-16">
-                    <div className="flex items-center gap-6">
-                        <Button variant="ghost" className="text-white hover:bg-white/10" onClick={() => window.location.href = '/'}>
-                            ← Dashboard
-                        </Button>
-                        <div className="flex items-center gap-4">
-                            <Logo inverted={true} className="h-6" />
-                            <div className="h-6 w-px bg-white/20"></div>
-                            <h1 className="text-white font-medium text-lg">Template Builder</h1>
-                            {!isTemplateAdmin && (
-                                <span className="bg-white/10 text-white text-xs px-2 py-0.5 rounded border border-white/20">
-                                    Read Only
-                                </span>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="flex gap-4 items-center">
-                        {/* Template Selector */}
-                        <div className="relative group">
-                            <select
-                                className="appearance-none bg-semester-blue-dark border border-white/20 text-white text-sm rounded-lg pl-4 pr-10 py-2 outline-none focus:ring-2 focus:ring-white/30 cursor-pointer hover:bg-semester-blue-dark/80 transition-colors min-w-[240px]"
-                                value={selectedTemplateId}
-                                onChange={(e) => {
-                                    if (e.target.value === 'new') handleNewTemplate();
-                                    else {
-                                        const t = templates.find(temp => temp.templateId === e.target.value);
-                                        if (t) selectTemplate(t);
-                                    }
-                                }}
-                            >
-                                <option value="" disabled>Select a template...</option>
-                                {templates.map(t => (
-                                    <option key={t.templateId} value={t.templateId}>
-                                        {t.name}
-                                    </option>
-                                ))}
-                                {isTemplateAdmin && (
-                                    <>
-                                        <option disabled>──────────</option>
-                                        <option value="new">+ Create New Template</option>
-                                    </>
-                                )}
-                            </select>
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white/50">
-                                ▼
-                            </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex gap-2">
-                            {isTemplateAdmin ? (
+                    {/* Template Selector */}
+                    <div className="relative group">
+                        <select
+                            className="appearance-none bg-white border border-nano-gray-300 text-nano-gray-900 text-sm rounded-lg pl-4 pr-10 py-2 outline-none focus:ring-2 focus:ring-semester-blue/20 focus:border-semester-blue cursor-pointer hover:border-semester-blue transition-colors min-w-[240px]"
+                            value={selectedTemplateId}
+                            onChange={(e) => {
+                                if (e.target.value === 'new') handleNewTemplate();
+                                else {
+                                    const t = templates.find(temp => temp.templateId === e.target.value);
+                                    if (t) selectTemplate(t);
+                                }
+                            }}
+                        >
+                            <option value="" disabled>Select a template...</option>
+                            {templates.map(t => (
+                                <option key={t.templateId} value={t.templateId}>
+                                    {t.name}
+                                </option>
+                            ))}
+                            {isTemplateAdmin && (
                                 <>
-                                    {selectedTemplateId && (
-                                        <Button
-                                            variant="secondary"
-                                            className="bg-white/10 text-white border-white/20 hover:bg-white/20 text-sm"
-                                            onClick={duplicateTemplate}
-                                            title="Duplicate Template"
-                                        >
-                                            Duplicate
-                                        </Button>
-                                    )}
-                                    <Button
-                                        onClick={handleSave}
-                                        disabled={!isDirty || isSaving}
-                                        className={`transition-all min-w-[100px] ${saveStatus === 'saved'
-                                            ? 'bg-green-500 hover:bg-green-600 border-green-600 text-white'
-                                            : 'bg-white text-semester-blue hover:bg-blue-50'
-                                            }`}
-                                    >
-                                        {saveStatus === 'saving' ? 'Saving...' :
-                                            saveStatus === 'saved' ? 'Saved ✓' :
-                                                'Save Changes'}
-                                    </Button>
+                                    <option disabled>──────────</option>
+                                    <option value="new">+ Create New Template</option>
                                 </>
-                            ) : (
-                                <div className="text-white/70 text-sm italic px-3">Editing Restricted</div>
                             )}
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-nano-gray-400">
+                            ▼
                         </div>
-                        <Button variant="ghost" className="text-white hover:bg-white/10" onClick={logout} title="Sign Out">
-                            ⏻
-                        </Button>
                     </div>
+
+                    {/* Actions */}
+                    {isTemplateAdmin ? (
+                        <div className="flex items-center gap-2">
+                            {selectedTemplateId && (
+                                <Button
+                                    variant="secondary"
+                                    className="text-sm"
+                                    onClick={duplicateTemplate}
+                                    title="Duplicate Template"
+                                >
+                                    Duplicate
+                                </Button>
+                            )}
+                            <Button
+                                onClick={handleSave}
+                                disabled={!isDirty || isSaving}
+                                className={`transition-all min-w-[100px] ${saveStatus === 'saved'
+                                    ? 'bg-status-success hover:bg-status-success/90 text-white border-transparent'
+                                    : 'bg-semester-blue text-white hover:bg-semester-blue-dark'
+                                    }`}
+                            >
+                                {saveStatus === 'saving' ? 'Saving...' :
+                                    saveStatus === 'saved' ? 'Saved ✓' :
+                                        'Save Changes'}
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="text-gray-400 text-sm italic px-3 bg-gray-50 rounded border border-gray-100 py-1.5">
+                            Read Only Mode
+                        </div>
+                    )}
                 </div>
-            </header>
+            </Header>
 
             {/* View Toggle */}
-            <div className="bg-white border-b border-nano-gray-200">
+            < div className="bg-white border-b border-nano-gray-200" >
                 <div className="max-w-7xl mx-auto px-6 py-2 flex justify-center">
                     <div className="flex bg-nano-gray-100 p-1 rounded-lg">
                         <button
@@ -287,15 +269,15 @@ const TemplateBuilder: React.FC = () => {
                         </button>
                     </div>
                 </div>
-            </div>
+            </div >
 
             {/* Main Content */}
-            <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex gap-8">
+            < main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex gap-8" >
 
                 {/* BUILDER TAB */}
-                <div className={`flex-1 flex flex-col gap-6 ${activeTab === 'preview' ? 'hidden' : 'block'}`}>
+                < div className={`flex-1 flex flex-col gap-6 ${activeTab === 'preview' ? 'hidden' : 'block'}`}>
                     {/* Template Settings */}
-                    <Card className="p-6">
+                    < Card className="p-6" >
                         <div className="flex justify-between items-start mb-4">
                             <div className="flex-1">
                                 <label className="block text-xs font-semibold text-nano-gray-500 uppercase tracking-wide mb-1">
@@ -331,10 +313,10 @@ const TemplateBuilder: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                    </Card>
+                    </Card >
 
                     {/* Fields List */}
-                    <Card className="flex-1 flex flex-col min-h-[500px]">
+                    < Card className="flex-1 flex flex-col min-h-[500px]" >
                         <div className="p-4 bg-nano-gray-50 border-b border-nano-gray-200 flex justify-between items-center rounded-t-xl">
                             <h2 className="font-semibold text-nano-gray-800">Questions & Fields</h2>
                             <span className="text-xs text-nano-gray-500">{fields.length} items</span>
@@ -443,67 +425,71 @@ const TemplateBuilder: React.FC = () => {
                         </div>
 
                         {/* Add Field Toolbar */}
-                        {isTemplateAdmin && (
-                            <div className="p-4 bg-nano-gray-50 border-t border-nano-gray-200 rounded-b-xl sticky bottom-0 z-10">
-                                <p className="text-xs font-bold text-nano-gray-400 uppercase tracking-wider mb-2">Append Field</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {[
-                                        { type: 'rating', icon: '⭐', label: 'Rating' },
-                                        { type: 'text', icon: '✍️', label: 'Short Text' },
-                                        { type: 'textarea', icon: '📝', label: 'Long Text' },
-                                        { type: 'boolean', icon: '⚡', label: 'Yes/No' },
-                                        { type: 'date', icon: '📅', label: 'Date' },
-                                        { type: 'signature', icon: '✒️', label: 'Signature' },
-                                    ].map(btn => (
-                                        <button
-                                            key={btn.type}
-                                            onClick={() => addField(btn.type as TemplateField['type'])}
-                                            className="px-3 py-2 bg-white border border-nano-gray-200 rounded-lg shadow-sm hover:border-semester-blue hover:text-semester-blue hover:shadow transition-all text-sm font-medium flex items-center gap-2"
-                                        >
-                                            <span>{btn.icon}</span>
-                                            {btn.label}
-                                        </button>
-                                    ))}
+                        {
+                            isTemplateAdmin && (
+                                <div className="p-4 bg-nano-gray-50 border-t border-nano-gray-200 rounded-b-xl sticky bottom-0 z-10">
+                                    <p className="text-xs font-bold text-nano-gray-400 uppercase tracking-wider mb-2">Append Field</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[
+                                            { type: 'rating', icon: '⭐', label: 'Rating' },
+                                            { type: 'text', icon: '✍️', label: 'Short Text' },
+                                            { type: 'textarea', icon: '📝', label: 'Long Text' },
+                                            { type: 'boolean', icon: '⚡', label: 'Yes/No' },
+                                            { type: 'date', icon: '📅', label: 'Date' },
+                                            { type: 'signature', icon: '✒️', label: 'Signature' },
+                                        ].map(btn => (
+                                            <button
+                                                key={btn.type}
+                                                onClick={() => addField(btn.type as TemplateField['type'])}
+                                                className="px-3 py-2 bg-white border border-nano-gray-200 rounded-lg shadow-sm hover:border-semester-blue hover:text-semester-blue hover:shadow transition-all text-sm font-medium flex items-center gap-2"
+                                            >
+                                                <span>{btn.icon}</span>
+                                                {btn.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                    </Card>
+                            )
+                        }
+                    </Card >
 
                     {/* Maintenance Tools (Hidden unless enabled) */}
-                    {isMaintenanceMode && isTemplateAdmin && (
-                        <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-xl">
-                            <h3 className="text-red-800 font-bold mb-4 flex items-center gap-2">
-                                <span>🛠️</span> Maintenance Tools
-                            </h3>
-                            <div className="flex gap-4">
-                                <Button
-                                    variant="secondary"
-                                    onClick={() => runMaintenanceAction('initializeDatabase', 'Restore Defaults: This will reset templates if missing.')}
-                                    className="bg-white border-red-200 text-red-700 hover:bg-red-100"
-                                >
-                                    Soft Restore
-                                </Button>
-                                <Button
-                                    variant="secondary"
-                                    onClick={() => runMaintenanceAction('seedEmploymentTemplate', 'SEED: Overwrite Employment Template?')}
-                                    className="bg-white border-red-200 text-red-700 hover:bg-red-100"
-                                >
-                                    Seed Emp. Ref
-                                </Button>
-                                <Button
-                                    variant="secondary"
-                                    onClick={() => runMaintenanceAction('fixTemplateStructure', 'FIX: Wipe and recreate "Standard Social Care"?')}
-                                    className="bg-white border-red-200 text-red-700 hover:bg-red-100"
-                                >
-                                    Fix Structure
-                                </Button>
+                    {
+                        isMaintenanceMode && isTemplateAdmin && (
+                            <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-xl">
+                                <h3 className="text-red-800 font-bold mb-4 flex items-center gap-2">
+                                    <span>🛠️</span> Maintenance Tools
+                                </h3>
+                                <div className="flex gap-4">
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => runMaintenanceAction('initializeDatabase', 'Restore Defaults: This will reset templates if missing.')}
+                                        className="bg-white border-red-200 text-red-700 hover:bg-red-100"
+                                    >
+                                        Soft Restore
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => runMaintenanceAction('seedEmploymentTemplate', 'SEED: Overwrite Employment Template?')}
+                                        className="bg-white border-red-200 text-red-700 hover:bg-red-100"
+                                    >
+                                        Seed Emp. Ref
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => runMaintenanceAction('fixTemplateStructure', 'FIX: Wipe and recreate "Standard Social Care"?')}
+                                        className="bg-white border-red-200 text-red-700 hover:bg-red-100"
+                                    >
+                                        Fix Structure
+                                    </Button>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                </div>
+                        )
+                    }
+                </div >
 
                 {/* PREVIEW TAB */}
-                <div className={`flex-1 ${activeTab === 'builder' ? 'hidden' : 'block'}`}>
+                < div className={`flex-1 ${activeTab === 'builder' ? 'hidden' : 'block'}`}>
                     <div className="sticky top-24 max-w-4xl mx-auto">
                         <div className="flex items-center justify-between mb-6">
                             <div>
@@ -585,9 +571,9 @@ const TemplateBuilder: React.FC = () => {
                             </Card>
                         )}
                     </div>
-                </div>
-            </main>
-        </div>
+                </div >
+            </main >
+        </div >
     );
 };
 
