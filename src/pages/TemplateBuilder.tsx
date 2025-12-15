@@ -480,33 +480,47 @@ const TemplateBuilder: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Desktop Preview */}
-                        {previewMode === 'desktop' && (
-                            <Card className="p-8 bg-white shadow-lg">
-                                <div className="max-w-4xl mx-auto">
-                                    <div className="text-center mb-8">
-                                        <h1 className="text-3xl font-bold text-nano-gray-900">Semester Reference</h1>
-                                        <p className="mt-2 text-sm text-nano-gray-600">
-                                            Reference for <span className="font-semibold">Candidate Name</span>
-                                        </p>
-                                    </div>
-
-                                    <DynamicForm
-                                        structure={fields}
-                                        onSubmit={(data) => console.log('Preview Submit:', data)}
-                                        previewMode="desktop"
-                                    />
-
-                                    <div className="mt-8 text-center text-xs text-nano-gray-400 border-t border-nano-gray-200 pt-6">
-                                        &copy; {new Date().getFullYear()} Semester. All rights reserved. Secure reference processing.
-                                    </div>
-                                </div>
-                            </Card>
-                        )}
                     </div>
                 </div>
-            </main>
+                    )}
+
+                {/* VISUAL DEBUGGER */}
+                <div className="mt-8 p-4 bg-black text-green-400 font-mono text-xs rounded overflow-auto h-48 border-2 border-green-500">
+                    <h3 className="font-bold underline mb-2">VISUAL DEBUG CONSOLE</h3>
+                    <p>Template Count: {templates.length}</p>
+                    <p>Selected ID: {selectedTemplateId}</p>
+                    <p>Is Admin: {isTemplateAdmin ? 'YES' : 'NO'}</p>
+                    <p>Last Result: {JSON.stringify(templates.map(t => t.name))}</p>
+                    <p>Full Data: {JSON.stringify(templates).substring(0, 500)}...</p>
+                </div>
+
+                {/* Desktop Preview */}
+                {previewMode === 'desktop' && (
+                    <Card className="p-8 bg-white shadow-lg">
+                        <div className="max-w-4xl mx-auto">
+                            <div className="text-center mb-8">
+                                <h1 className="text-3xl font-bold text-nano-gray-900">Semester Reference</h1>
+                                <p className="mt-2 text-sm text-nano-gray-600">
+                                    Reference for <span className="font-semibold">Candidate Name</span>
+                                </p>
+                            </div>
+
+                            <DynamicForm
+                                structure={fields}
+                                onSubmit={(data) => console.log('Preview Submit:', data)}
+                                previewMode="desktop"
+                            />
+
+                            <div className="mt-8 text-center text-xs text-nano-gray-400 border-t border-nano-gray-200 pt-6">
+                                &copy; {new Date().getFullYear()} Semester. All rights reserved. Secure reference processing.
+                            </div>
+                        </div>
+                    </Card>
+                )}
         </div>
+                </div >
+            </main >
+        </div >
     );
 };
 
