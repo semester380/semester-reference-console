@@ -37,7 +37,7 @@ const TemplateBuilder: React.FC = () => {
 
             // HELPFUL DEBUG & AUTO-REPAIR
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const meta = (result as any).meta;
+            // const meta = (result as any).meta;
             if (loadedTemplates.length === 0) {
                 // ... keep existing ...
             }
