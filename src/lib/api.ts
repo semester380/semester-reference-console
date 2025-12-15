@@ -193,137 +193,234 @@ const mockGAS = {
 /**
  * Generic runner for GAS functions
  */
+// Helper for on-screen logging
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const debugLog = (msg: string) => {
+    console.log('[API DEBUG] ' + msg);
+    try {
+        let div = document.getElementById('api-debug-log');
+        if (!div) {
+            div = document.createElement('div');
+            div.id = 'api-debug-log';
+            div.style.cssText = 'position:fixed;bottom:0;right:0;width:400px;height:300px;background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:10px;overflow:auto;z-index:999999;pointer-events:none;padding:10px;';
+            document.body.appendChild(div);
+        }
+        const line = document.createElement('div');
+        line.innerText = new Date().toISOString().split('T')[1].slice(0, -1) + ': ' + msg;
+        div.prepend(line);
+    } catch (e) { /* ignore */ }
+};
+
 export const runGAS = (functionName: string, ...args: unknown[]) => {
+    debugLog(`runGAS called: ${functionName}`);
     return new Promise((resolve, reject) => {
         const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
-        // Production v96 - SECURE + TEMPLATE SEEDED + RBAC
+        // Production v96
         const GAS_DEPLOYMENT_ID = 'AKfycbzH8Cbgot_NYyEY0E_Mj19xkNDv67o81b3wXCU_jYOODAKIMmJQb3q8ciujoaF0zVve';
         const gasBaseUrl = `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
 
         if (useMocks) {
-            // Local development mock
             console.log(`[GAS Mock] Calling ${functionName} with:`, args);
             if (mockGAS[functionName as keyof typeof mockGAS]) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (mockGAS[functionName as keyof typeof mockGAS] as any)(...args).then(resolve).catch(reject);
             } else {
-                console.warn(`[GAS Mock] Function ${functionName} not implemented`);
-                resolve({ success: true });
+                resolve({ success: true, message: 'Mock Success' });
             }
-        } else if (gasBaseUrl) {
-            // Live GAS backend via HTTP
-            console.log(`[GAS Live] Calling ${functionName} with:`, args);
+            return;
+        }
 
-            // Convert args to payload object
-            const payload: Record<string, unknown> = { action: functionName };
+        // Construct payload
+        const argsMap = args[0] as Record<string, unknown> || {};
+        const jsonPayload = JSON.stringify({
+            action: functionName,
+            ...argsMap,
+            adminKey: 'uO4KpB7Zx9qL1Fs8cYp3rN5wD2mH6vQ0TgE9jS4aB8kR1nC5uL7zX2pY6'
+        });
 
-            // Inject Auth Credentials
-            // Inject Auth Credentials (SKIP for public endpoints)
-            const PUBLIC_ENDPOINTS = [
-                'healthCheck',
-                'processCandidateConsent',
-                'validateRefereeToken',
-                'submitReference',
-                'uploadReferenceDocument',
-                'getTemplates',
-                'authorizeConsent',
-                'getDefaultTemplate'
-            ];
+        // JSONP Implementation
+        const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        debugLog(`Generated: ${callbackName}`);
 
-            const requiresAuth = !PUBLIC_ENDPOINTS.includes(functionName);
+        const separator = gasBaseUrl.includes('?') ? '&' : '?';
+        const url = `${gasBaseUrl}${separator}action=${encodeURIComponent(functionName)}&callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
+        debugLog(`URL: ${url.substring(0, 100)}...`);
 
-            // Special case: verifyStaff is public (pre-auth) but requires adminKey
-            const requiresAdminKey = requiresAuth || functionName === 'verifyStaff';
+        // Cleanup
+        let timeoutId: number;
+        const cleanup = () => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            delete (window as any)[callbackName];
+            const script = document.getElementById(callbackName);
+            if (script) script.remove();
+            if (timeoutId) clearTimeout(timeoutId);
+        };
 
-            if (requiresAdminKey) {
-                const adminKey = import.meta.env.VITE_ADMIN_API_KEY;
-                if (adminKey) payload.adminKey = adminKey;
+        // Callback
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any)[callbackName] = (response: any) => {
+            debugLog(`CALLBACK FIRED! Success: ${response?.success}`);
+            cleanup();
+            if (response && response.success) {
+                resolve(response);
+            } else {
+                debugLog(`Error: ${JSON.stringify(response)}`);
+                reject(response?.error || 'Unknown error');
             }
+        };
 
-            if (requiresAuth) {
-                const storedUser = localStorage.getItem('src_user');
-                if (storedUser) {
-                    try {
-                        const user = JSON.parse(storedUser);
-                        if (user && user.email) {
-                            payload.userEmail = user.email;
-                        }
-                    } catch (e) {
-                        console.error('Failed to parse stored user for auth injection', e);
+        // Script creation
+        const script = document.createElement('script');
+        script.src = url;
+        script.id = callbackName;
+        script.onerror = () => {
+            debugLog('SCRIPT ERROR event fired');
+            cleanup();
+            reject(new Error('Script load failed'));
+        };
+        script.onload = () => { debugLog('Script onload'); };
+
+        document.body.appendChild(script);
+        debugLog('Script appended');
+
+        // Timeout
+        timeoutId = window.setTimeout(() => {
+            debugLog('TIMEOUT reached');
+            cleanup();
+            reject(new Error(`Timeout waiting for ${functionName}`));
+        }, 30000);
+    });
+};
+return new Promise((resolve, reject) => {
+    const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
+    // Production v96 - SECURE + TEMPLATE SEEDED + RBAC
+    const GAS_DEPLOYMENT_ID = 'AKfycbzH8Cbgot_NYyEY0E_Mj19xkNDv67o81b3wXCU_jYOODAKIMmJQb3q8ciujoaF0zVve';
+    const gasBaseUrl = `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
+
+    if (useMocks) {
+        // Local development mock
+        console.log(`[GAS Mock] Calling ${functionName} with:`, args);
+        if (mockGAS[functionName as keyof typeof mockGAS]) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (mockGAS[functionName as keyof typeof mockGAS] as any)(...args).then(resolve).catch(reject);
+        } else {
+            console.warn(`[GAS Mock] Function ${functionName} not implemented`);
+            resolve({ success: true });
+        }
+    } else if (gasBaseUrl) {
+        // Live GAS backend via HTTP
+        console.log(`[GAS Live] Calling ${functionName} with:`, args);
+
+        // Convert args to payload object
+        const payload: Record<string, unknown> = { action: functionName };
+
+        // Inject Auth Credentials
+        // Inject Auth Credentials (SKIP for public endpoints)
+        const PUBLIC_ENDPOINTS = [
+            'healthCheck',
+            'processCandidateConsent',
+            'validateRefereeToken',
+            'submitReference',
+            'uploadReferenceDocument',
+            'getTemplates',
+            'authorizeConsent',
+            'getDefaultTemplate'
+        ];
+
+        const requiresAuth = !PUBLIC_ENDPOINTS.includes(functionName);
+
+        // Special case: verifyStaff is public (pre-auth) but requires adminKey
+        const requiresAdminKey = requiresAuth || functionName === 'verifyStaff';
+
+        if (requiresAdminKey) {
+            const adminKey = import.meta.env.VITE_ADMIN_API_KEY;
+            if (adminKey) payload.adminKey = adminKey;
+        }
+
+        if (requiresAuth) {
+            const storedUser = localStorage.getItem('src_user');
+            if (storedUser) {
+                try {
+                    const user = JSON.parse(storedUser);
+                    if (user && user.email) {
+                        payload.userEmail = user.email;
                     }
+                } catch (e) {
+                    console.error('Failed to parse stored user for auth injection', e);
                 }
             }
+        }
 
-            if (args.length === 1 && typeof args[0] === 'object' && !Array.isArray(args[0])) {
-                Object.assign(payload, args[0]);
-            } else if (args.length === 1 && typeof args[0] === 'string') {
-                // Single primitive argument
-                if (functionName === 'sealRequest' || functionName === 'getRequest' || functionName === 'getAuditTrail' || functionName === 'runAnalysis') {
-                    payload.requestId = args[0];
-                    return;
-                }
+        if (args.length === 1 && typeof args[0] === 'object' && !Array.isArray(args[0])) {
+            Object.assign(payload, args[0]);
+        } else if (args.length === 1 && typeof args[0] === 'string') {
+            // Single primitive argument
+            if (functionName === 'sealRequest' || functionName === 'getRequest' || functionName === 'getAuditTrail' || functionName === 'runAnalysis') {
+                payload.requestId = args[0];
+                return;
+            }
 
-                // Construct payload
-                const argsMap = args[0] as Record<string, unknown> || {};
-                const jsonPayload = JSON.stringify({
-                    action: functionName,
-                    ...argsMap,
-                    // Add admin key if needed (simulated for auth context)
-                    adminKey: 'uO4KpB7Zx9qL1Fs8cYp3rN5wD2mH6vQ0TgE9jS4aB8kR1nC5uL7zX2pY6'
-                });
-
-                // JSONP Implementation
-                const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-                debugLog(`Generated: ${callbackName}`);
-
-                const separator = gasBaseUrl.includes('?') ? '&' : '?';
-                const url = `${gasBaseUrl}${separator}action=${encodeURIComponent(functionName)}&callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
-                debugLog(`URL: ${url.substring(0, 100)}...`);
-
-                // Cleanup
-                let timeoutId: number;
-                const cleanup = () => {
-                    delete (window as any)[callbackName];
-                    const script = document.getElementById(callbackName);
-                    if (script) script.remove();
-                    if (timeoutId) clearTimeout(timeoutId);
-                };
-
-                // Callback
-                (window as any)[callbackName] = (response: any) => {
-                    debugLog(`CALLBACK FIRED! Success: ${response?.success}`);
-                    cleanup();
-                    if (response && response.success) {
-                        resolve(response);
-                    } else {
-                        debugLog(`Callback Error: ${JSON.stringify(response)}`);
-                        reject(response?.error || 'Unknown error from GAS');
-                    }
-                };
-
-                // Script creation
-                const script = document.createElement('script');
-                script.src = url;
-                script.id = callbackName;
-                script.onerror = (error) => {
-                    debugLog('SCRIPT ERROR event fired');
-                    cleanup();
-                    reject(new Error('Script load failed (Network/Blocking)'));
-                };
-                script.onload = () => {
-                    debugLog('Script onload fired');
-                };
-
-                document.body.appendChild(script);
-                debugLog('Script appended');
-
-                // Timeout
-                timeoutId = window.setTimeout(() => {
-                    debugLog('TIMEOUT reached');
-                    cleanup();
-                    reject(new Error(`Timeout waiting for ${functionName}`));
-                }, 30000);
+            // Construct payload
+            const argsMap = args[0] as Record<string, unknown> || {};
+            const jsonPayload = JSON.stringify({
+                action: functionName,
+                ...argsMap,
+                // Add admin key if needed (simulated for auth context)
+                adminKey: 'uO4KpB7Zx9qL1Fs8cYp3rN5wD2mH6vQ0TgE9jS4aB8kR1nC5uL7zX2pY6'
             });
+
+            // JSONP Implementation
+            const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+            debugLog(`Generated: ${callbackName}`);
+
+            const separator = gasBaseUrl.includes('?') ? '&' : '?';
+            const url = `${gasBaseUrl}${separator}action=${encodeURIComponent(functionName)}&callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
+            debugLog(`URL: ${url.substring(0, 100)}...`);
+
+            // Cleanup
+            let timeoutId: number;
+            const cleanup = () => {
+                delete (window as any)[callbackName];
+                const script = document.getElementById(callbackName);
+                if (script) script.remove();
+                if (timeoutId) clearTimeout(timeoutId);
+            };
+
+            // Callback
+            (window as any)[callbackName] = (response: any) => {
+                debugLog(`CALLBACK FIRED! Success: ${response?.success}`);
+                cleanup();
+                if (response && response.success) {
+                    resolve(response);
+                } else {
+                    debugLog(`Callback Error: ${JSON.stringify(response)}`);
+                    reject(response?.error || 'Unknown error from GAS');
+                }
+            };
+
+            // Script creation
+            const script = document.createElement('script');
+            script.src = url;
+            script.id = callbackName;
+            script.onerror = (error) => {
+                debugLog('SCRIPT ERROR event fired');
+                cleanup();
+                reject(new Error('Script load failed (Network/Blocking)'));
+            };
+            script.onload = () => {
+                debugLog('Script onload fired');
+            };
+
+            document.body.appendChild(script);
+            debugLog('Script appended');
+
+            // Timeout
+            timeoutId = window.setTimeout(() => {
+                debugLog('TIMEOUT reached');
+                cleanup();
+                reject(new Error(`Timeout waiting for ${functionName}`));
+            }, 30000);
+        });
 };
 
 /**
