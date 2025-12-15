@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Input, Badge, Loader } from '../components/UI';
+import { Card, Loader } from '../components/UI';
 import { DynamicForm } from '../components/DynamicForm';
 import { Logo } from '../components/Logo';
 import { runGAS } from '../lib/api';
 import { Header } from '../components/Header';
-import { SignaturePadField } from '../components/SignaturePadField';
+
 import type { Template } from '../types';
 
 const RefereePortal: React.FC = () => {

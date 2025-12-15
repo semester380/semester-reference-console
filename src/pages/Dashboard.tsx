@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Badge, Loader } from '../components/UI';
+import { Card, Button } from '../components/UI';
 import { NewRequestModal } from '../components/NewRequestModal';
 import { RequestList } from '../components/RequestList';
 import { ReferenceViewer } from '../components/ReferenceViewer';
