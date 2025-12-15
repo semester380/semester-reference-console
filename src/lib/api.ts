@@ -260,44 +260,8 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
                 // Single primitive argument
                 if (functionName === 'sealRequest' || functionName === 'getRequest' || functionName === 'getAuditTrail' || functionName === 'runAnalysis') {
                     payload.requestId = args[0];
-                } else {
-                    payload.token = args[0];
+                    return;
                 }
-            } else if (args.length === 1 && Array.isArray(args[0])) {
-                // Array argument - for bulk action functions
-                if (functionName === 'archiveRequests' || functionName === 'unarchiveRequests' || functionName === 'deleteRequests') {
-                    payload.requestIds = args[0];
-                } else {
-                    payload.data = args[0];
-                }
-            } else if (args.length > 1) {
-                if (functionName === 'submitReference') {
-                    // Map arguments for submitReference: token, responses, method, declineReason, declineDetails, uploadedFileUrl, fileName
-                    payload.token = args[0];
-                    payload.responses = args[1];
-                    if (args[2]) payload.method = args[2];
-                    if (args[3]) payload.declineReason = args[3];
-                    if (args[4]) payload.declineDetails = args[4];
-                    if (args[5]) payload.uploadedFileUrl = args[5];
-                    if (args[6]) payload.fileName = args[6];
-                } else if (functionName === 'authorizeConsent') {
-                    payload.token = args[0];
-                    payload.decision = args[1];
-                } else if (functionName === 'uploadReferenceDocument') {
-                    // Payload is already an object with token, fileData, fileName, mimeType
-                    Object.assign(payload, args[0]);
-                } else if (functionName === 'saveTemplate') {
-                    payload.name = args[0];
-                    payload.structure = args[1];
-                } else if (functionName === 'addStaff') {
-                    payload.name = args[0];
-                    payload.email = args[1];
-                    payload.role = args[2];
-                } else {
-                    // For other functions with multiple args, map them to named parameters
-                    payload.data = args;
-                }
-                debugLog(`runGAS called: ${functionName}`);
 
                 // Construct payload
                 const argsMap = args[0] as Record<string, unknown> || {};
@@ -305,21 +269,61 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
                     action: functionName,
                     ...argsMap,
                     // Add admin key if needed (simulated for auth context)
-                    adminKey: 'uO4KpB7Zx9qL1Fs8cYp3rN5wD2mH6vQ0TgE9jS4aB8kR1nC5uL7zX2pY6' // Hardcoded for verifying fix
+                    adminKey: 'uO4KpB7Zx9qL1Fs8cYp3rN5wD2mH6vQ0TgE9jS4aB8kR1nC5uL7zX2pY6'
                 });
 
-                // JSONP Implementation to bypass CORS/Auth issues
+                // JSONP Implementation
                 const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-                delete window[callbackName];
-                if (script.parentNode) {
-                    script.parentNode.removeChild(script);
-                }
-            }
-        });
-} else {
-    reject(new Error('GAS backend URL not configured. Set VITE_GAS_BASE_URL in .env'));
-        }
-    });
+                debugLog(`Generated: ${callbackName}`);
+
+                const separator = gasBaseUrl.includes('?') ? '&' : '?';
+                const url = `${gasBaseUrl}${separator}action=${encodeURIComponent(functionName)}&callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
+                debugLog(`URL: ${url.substring(0, 100)}...`);
+
+                // Cleanup
+                let timeoutId: number;
+                const cleanup = () => {
+                    delete (window as any)[callbackName];
+                    const script = document.getElementById(callbackName);
+                    if (script) script.remove();
+                    if (timeoutId) clearTimeout(timeoutId);
+                };
+
+                // Callback
+                (window as any)[callbackName] = (response: any) => {
+                    debugLog(`CALLBACK FIRED! Success: ${response?.success}`);
+                    cleanup();
+                    if (response && response.success) {
+                        resolve(response);
+                    } else {
+                        debugLog(`Callback Error: ${JSON.stringify(response)}`);
+                        reject(response?.error || 'Unknown error from GAS');
+                    }
+                };
+
+                // Script creation
+                const script = document.createElement('script');
+                script.src = url;
+                script.id = callbackName;
+                script.onerror = (error) => {
+                    debugLog('SCRIPT ERROR event fired');
+                    cleanup();
+                    reject(new Error('Script load failed (Network/Blocking)'));
+                };
+                script.onload = () => {
+                    debugLog('Script onload fired');
+                };
+
+                document.body.appendChild(script);
+                debugLog('Script appended');
+
+                // Timeout
+                timeoutId = window.setTimeout(() => {
+                    debugLog('TIMEOUT reached');
+                    cleanup();
+                    reject(new Error(`Timeout waiting for ${functionName}`));
+                }, 30000);
+            });
 };
 
 /**
