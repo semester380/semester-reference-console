@@ -44,7 +44,7 @@ const RefereePortal: React.FC = () => {
 
     const validateToken = async (token: string) => {
         try {
-            const result = await runGAS('validateRefereeToken', token) as { valid: boolean; candidateName: string; template: Template; error?: string };
+            const result = await runGAS('validateRefereeToken', { token }) as { valid: boolean; candidateName: string; template: Template; error?: string };
 
             if (result.valid) {
                 setCandidateName(result.candidateName);
@@ -65,7 +65,7 @@ const RefereePortal: React.FC = () => {
         const token = params.get('token');
 
         try {
-            const result = await runGAS('submitReference', token, responses) as { success: boolean; error?: string };
+            const result = await runGAS('submitReference', { token, responses }) as { success: boolean; error?: string };
             if (result.success) {
                 setIsSuccess(true);
             } else {
@@ -145,7 +145,13 @@ const RefereePortal: React.FC = () => {
         const token = params.get('token');
 
         try {
-            const result = await runGAS('submitReference', token, {}, 'decline', declineReason, declineDetails) as { success: boolean; error?: string };
+            const result = await runGAS('submitReference', {
+                token,
+                responses: {},
+                method: 'decline',
+                declineReason,
+                declineDetails
+            }) as { success: boolean; error?: string };
             if (result.success) {
                 setIsSuccess(true);
             } else {
@@ -164,7 +170,7 @@ const RefereePortal: React.FC = () => {
         const token = params.get('token');
 
         try {
-            const result = await runGAS('authorizeConsent', token, decision) as { success: boolean; error?: string };
+            const result = await runGAS('authorizeConsent', { token, decision }) as { success: boolean; error?: string };
             if (result.success) {
                 setIsSuccess(true);
                 // If declined, we might want to show a different message, but isSuccess=true handles generic success.

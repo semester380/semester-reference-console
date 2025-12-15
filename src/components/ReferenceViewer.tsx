@@ -3,6 +3,7 @@ import { Card, Button } from './UI';
 import { runGAS } from '../lib/api';
 import type { AuditEvent, Request, SignatureResponse } from '../types';
 
+import { useAuth } from '../context/AuthContext';
 interface ReferenceViewerProps {
     requestId: string;
     candidateName: string;
@@ -30,6 +31,7 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
     onClose,
     onSealed
 }) => {
+    const { user } = useAuth();
     const [auditTrail, setAuditTrail] = useState<AuditEvent[]>([]);
     const [isLoadingAudit, setIsLoadingAudit] = useState(false);
     const [showAudit, setShowAudit] = useState(false);
@@ -52,7 +54,8 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
         try {
             console.log('Loading request data for:', requestId);
             // Fetch full request details
-            const response = await runGAS('getMyRequests') as { success: boolean; data: Request[] };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const response = await runGAS('getMyRequests', { includeArchived: true, userEmail: user?.email }) as { success: boolean; data: Request[] };
             console.log('API Response:', response);
 
             if (response && response.data) {
@@ -74,7 +77,7 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
     const loadAuditTrail = async () => {
         setIsLoadingAudit(true);
         try {
-            const trail = await runGAS('getAuditTrail', requestId) as AuditEvent[];
+            const trail = await runGAS('getAuditTrail', { requestId, userEmail: user?.email }) as AuditEvent[];
             setAuditTrail(trail);
         } catch (e) {
             console.error('Failed to load audit trail:', e);
@@ -90,7 +93,7 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
 
         setIsSealing(true);
         try {
-            const result = await runGAS('sealRequest', requestId) as { success: boolean; error?: string };
+            const result = await runGAS('sealRequest', { requestId, userEmail: user?.email }) as { success: boolean; error?: string };
             if (result.success) {
                 alert('Reference sealed successfully!');
                 if (onSealed) onSealed();
@@ -116,7 +119,7 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
             }
 
             // Generate PDF via seal if not exists
-            const result = await runGAS('sealRequest', requestId) as { success: boolean; pdfUrl?: string; error?: string };
+            const result = await runGAS('sealRequest', { requestId, userEmail: user?.email }) as { success: boolean; pdfUrl?: string; error?: string };
 
             if (result.success && result.pdfUrl) {
                 window.open(result.pdfUrl, '_blank');
