@@ -29,6 +29,8 @@ const TemplateBuilder: React.FC = () => {
             const loadedTemplates = Array.isArray(result) ? result : (result as any).data || [];
 
             setTemplates(loadedTemplates);
+            // DEBUG: Alert what we got
+            alert('Debug Templates: ' + JSON.stringify(result));
 
 
             // HELPFUL DEBUG & AUTO-REPAIR
