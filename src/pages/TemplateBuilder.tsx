@@ -22,10 +22,11 @@ const TemplateBuilder: React.FC = () => {
 
     // Load templates on mount
     const loadTemplates = useCallback(async () => {
-        // alert('DEBUG: Starting loadTemplates...'); 
+        alert('DEBUG: Starting loadTemplates...');
         try {
             const result = await runGAS('getTemplates');
-            // alert('DEBUG: Got result: ' + JSON.stringify(result));
+            alert('DEBUG: Got result: ' + JSON.stringify(result));
+            // ...
 
             // Check if result is the array or the response wrapper
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -99,6 +100,7 @@ const TemplateBuilder: React.FC = () => {
     }, [selectedTemplateId]);
 
 useEffect(() => {
+    alert('DEBUG: Component Mounted / Effect Running');
     loadTemplates();
 }, [loadTemplates]);
 
