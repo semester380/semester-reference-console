@@ -302,7 +302,7 @@ function handleApiRequest(e) {
       'archiveRequests', 'unarchiveRequests', 'deleteRequests', 
       'runSmartChase', 'runAnalysis', 'listStaff', 'addStaff', 
       'updateStaff', 'deactivateStaff', 
-      'initializeDatabase', 'resetTemplates', 'fixTemplateStructure', 'sealRequest', 'diagnoseConfig', 'fixPermissions',
+      'initializeDatabase', 'resetTemplates', 'fixTemplateStructure', 'seedEmploymentTemplate', 'sealRequest', 'diagnoseConfig', 'fixPermissions',
       'runCompleteE2ETest', 'runQA', 'saveTemplate', 'deleteTemplate'
     ];
     
@@ -406,6 +406,9 @@ function handleApiRequest(e) {
         break;
       case 'deleteTemplate':
         result = deleteTemplate(payload.templateId, staff);
+        break;
+      case 'seedEmploymentTemplate':
+        result = seedEmploymentTemplate();
         break;
       case 'archiveRequests':
         result = archiveRequests(payload.requestIds, staff);
@@ -1400,7 +1403,8 @@ function getTemplateById(templateId) {
 
 function saveTemplate(name, structure, templateId, staff) {
   try {
-    if (!staff || !isTemplateAdmin(staff.email)) {
+    const userEmail = Session.getActiveUser().getEmail();
+    if (!isTemplateAdmin(userEmail)) {
       throw new Error('Unauthorized: Only specialized admins can edit templates.');
     }
     
@@ -1853,20 +1857,68 @@ function sendReferenceDeclinedNotification(requestId, reason) {
 }
 
 
+/**
+ * Delete a template
+ */
+function deleteTemplate(templateId, staff) {
+  try {
+    // 1. Strict RBAC Check
+    // If called from API 'staff' might be passed, if from refined Context it might be different.
+    // For GAS web apps running as 'User accessing the web app', Session.getActiveUser() is reliable for the actual Google user.
+    // We will verify BOTH just to be safe if 'staff' context is used.
+    
+    const userEmail = Session.getActiveUser().getEmail();
+    if (!isTemplateAdmin(userEmail)) {
+       return { success: false, error: "Unauthorized: Only Rob or Nicola can delete templates." };
+    }
+
+    if (!templateId) return { success: false, error: "Missing template ID" };
+    
+    // Prevent deleting default
+    if (templateId === DEFAULT_TEMPLATE.id) {
+       return { success: false, error: "Cannot delete the default system template" };
+    }
+
+    const ss = getDatabaseSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_TEMPLATES);
+    const data = sheet.getDataRange().getValues();
+    
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === templateId) {
+        rowIndex = i + 1; // 1-based index
+        break;
+      }
+    }
+    
+    if (rowIndex === -1) {
+      return { success: false, error: "Template not found" };
+    }
+    
+    sheet.deleteRow(rowIndex);
+    
+    return { success: true };
+    
+  } catch (e) {
+    console.error("deleteTemplate Error:", e);
+    return { success: false, error: e.toString() };
+  }
+}
+
+/**
+ * Build HTML content for PDF generation
+ */
 function buildFormContent(responses, customTemplate) {
   const template = customTemplate || DEFAULT_TEMPLATE;
   let html = '';
   
-  // Get field labels from template
-  const fieldLabels = {};
-  const fieldTypes = {};
-  template.sections.forEach(section => {
-    section.fields.forEach(field => {
-      fieldLabels[field.id] = field.label;
-      fieldTypes[field.id] = field.type;
-    });
-  });
-  
+  // Helper to safely get value
+  const getVal = (id) => {
+    let v = responses[id];
+    if (v === undefined || v === null) return null;
+    return v;
+  };
+
   // Build HTML for each section
   template.sections.forEach(section => {
     // Skip declaration section for now (handled separately with signature)
@@ -1874,55 +1926,43 @@ function buildFormContent(responses, customTemplate) {
     
     let sectionHtml = '<div class="section">';
     sectionHtml += '<div class="section-title">' + section.title + '</div>';
-    
     if (section.description) {
-      sectionHtml += '<div class="section-description">' + section.description + '</div>';
+       sectionHtml += '<div class="section-description">' + section.description + '</div>';
     }
     
-    // Render ratings in a compact grid
-    if (section.id === 'ratings') {
-      sectionHtml += '<div class="ratings-grid">';
-      section.fields.forEach(field => {
-        if (field.type === 'rating') {
-          const value = responses[field.id];
-          sectionHtml += '<div class="rating-item">';
-          sectionHtml += '<div class="rating-label">' + field.label + '</div>';
-          sectionHtml += '<div class="rating-value">' + (value || 'Not rated') + '</div>';
+    // Check if we should use grid (if section contains half-width items)
+    // We'll iterate manually to handle layout
+    let i = 0;
+    while(i < section.fields.length) {
+      const field = section.fields[i];
+      const value = getVal(field.id);
+      
+      // Handle Half-Width Pairing
+      if (field.layout === 'half') {
+         // Start grid row
+         sectionHtml += '<div class="info-grid" style="margin-bottom: 8px;">';
+         
+         // Item 1
+         sectionHtml += buildFieldHtml(field, value);
+         
+         // Item 2 (if exists and is half)
+         const nextField = section.fields[i+1];
+         if (nextField && nextField.layout === 'half') {
+            sectionHtml += buildFieldHtml(nextField, getVal(nextField.id));
+            i++; // Skip next
+         } else {
+            // Empty spacer if needed, or just end grid
+            sectionHtml += '<div></div>'; 
+         }
+         
+         sectionHtml += '</div>'; // End grid
+      } else {
+         // Full width
+          sectionHtml += '<div style="margin-bottom: 8px;">';
+          sectionHtml += buildFieldHtml(field, value);
           sectionHtml += '</div>';
-        } else if (field.type === 'textarea' && responses[field.id]) {
-          sectionHtml += '<div class="question-block" style="grid-column: 1 / -1;">';
-          sectionHtml += '<div class="question-label">' + field.label + '</div>';
-          sectionHtml += '<div class="answer">' + responses[field.id] + '</div>';
-          sectionHtml += '</div>';
-        }
-      });
-      sectionHtml += '</div>';
-    } else {
-      // Render other fields
-      section.fields.forEach(field => {
-        const value = responses[field.id];
-        
-        // Skip empty optional fields
-        if (value === undefined || value === null || value === '') {
-          if (!field.required) return;
-        }
-        
-        sectionHtml += '<div class="question-block">';
-        sectionHtml += '<div class="question-label">' + field.label + '</div>';
-        
-        if (field.type === 'boolean') {
-          const display = value === true || value === 'true' || value === 'Yes' ? '✓ Yes' : '✗ No';
-          const className = value === true || value === 'true' || value === 'Yes' ? 'answer-yes' : 'answer-no';
-          sectionHtml += '<div class="answer ' + className + '">' + display + '</div>';
-        } else if (field.type === 'date') {
-          const dateStr = value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not specified';
-          sectionHtml += '<div class="answer">' + dateStr + '</div>';
-        } else {
-          sectionHtml += '<div class="answer">' + (value || '-') + '</div>';
-        }
-        
-        sectionHtml += '</div>';
-      });
+      }
+      i++;
     }
     
     sectionHtml += '</div>';
@@ -1932,6 +1972,54 @@ function buildFormContent(responses, customTemplate) {
   // Build Declaration section with signature
   html += buildDeclarationSection(responses);
   
+  return html;
+}
+
+/**
+ * Helper to build single field HTML
+ */
+function buildFieldHtml(field, value) {
+  let html = '<div class="question-block">';
+  html += '<div class="question-label">' + field.label + '</div>';
+  
+  if (field.type === 'rating') {
+    const num = parseInt(value);
+    let label = '-';
+    if (!isNaN(num)) {
+      const labels = ['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'];
+      // scale 1-5
+      const text = labels[num - 1] || '';
+      label = num + '/5 ' + (text ? '('+text+')' : '');
+    }
+    html += '<div class="answer"><span class="rating-value">' + label + '</span></div>';
+  } else if (field.type === 'boolean') {
+    // Tickbox style
+    const isTrue = (value === true || value === 'true');
+    // Using HTML symbols for checkbox state
+    // ☑ (checked) = &#9745;
+    // ☐ (unchecked) = &#9744;
+    
+    // If it's a specific "Consent" boolean, we might want to show both options?
+    // For general booleans:
+    if (value === null) {
+       html += '<div class="answer">-</div>';
+    } else {
+       html += '<div class="answer" style="font-size: 14px;">';
+       html += (isTrue ? '&#9745; Yes &nbsp;&nbsp; &#9744; No' : '&#9744; Yes &nbsp;&nbsp; &#9745; No');
+       html += '</div>';
+    }
+  } else if (field.type === 'date') {
+    const dateStr = value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
+    html += '<div class="answer">' + dateStr + '</div>';
+  } else if (field.type === 'textarea') {
+     // Preserve line breaks
+     const text = value ? String(value).replace(/\n/g, '<br>') : '-';
+     html += '<div class="answer">' + text + '</div>';
+  } else {
+    html += '<div class="answer">' + (value || '-') + '</div>';
+  }
+  
+  html += '</div>';
   return html;
 }
 

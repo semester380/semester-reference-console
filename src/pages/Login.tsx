@@ -2,7 +2,8 @@ import { useAuth } from '../context/AuthContext';
 import { ShieldCheck, Lock } from 'lucide-react';
 
 export default function LoginPage() {
-    const { login, isLoading } = useAuth();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { login, isLoading, debugLogin } = useAuth() as any;
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -36,9 +37,7 @@ export default function LoginPage() {
                             {import.meta.env.DEV && (
                                 <button
                                     onClick={() => {
-                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                        const auth = useAuth() as any;
-                                        if (auth.debugLogin) auth.debugLogin();
+                                        if (debugLogin) debugLogin();
                                     }}
                                     className="mt-2 w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 mb-4"
                                 >

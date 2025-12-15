@@ -47,7 +47,8 @@ const TemplateBuilder: React.FC = () => {
                 if (standard) {
                     const hasFields = standard.structureJSON && Array.isArray(standard.structureJSON) && standard.structureJSON.length > 0;
                     if (!hasFields) {
-                        const repairKey = 'template_repair_attempted_' + Date.now().toString().substring(0, 8); // Unique per session/day approx
+                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                        // const repairKey = 'template_repair_attempted_' + Date.now().toString().substring(0, 8); // Unique per session/day approx
                         // Use a simpler flag to avoid infinite loops in short term
                         if (!sessionStorage.getItem('repair_triggered')) {
                             sessionStorage.setItem('repair_triggered', 'true');
@@ -69,6 +70,7 @@ const TemplateBuilder: React.FC = () => {
 
             // Auto-select "Standard" template if available
             if (loadedTemplates.length > 0 && !selectedTemplateId) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const standard = loadedTemplates.find((t: any) => t.templateId === 'standard-social-care');
                 const first = standard || loadedTemplates[0];
                 setTemplateName(first.name);
@@ -204,7 +206,7 @@ const TemplateBuilder: React.FC = () => {
                                     : 'text-nano-gray-600 hover:text-nano-gray-900'
                                     }`}
                             >
-                                Editor
+                                {isTemplateAdmin ? 'Editor' : 'View Structure'}
                             </button>
                             <button
                                 onClick={() => setActiveTab('preview')}
@@ -216,7 +218,7 @@ const TemplateBuilder: React.FC = () => {
                                 Preview
                             </button>
                         </div>
-                        {isTemplateAdmin && (
+                        {isTemplateAdmin ? (
                             <>
                                 <Button
                                     variant="secondary"
@@ -238,6 +240,23 @@ const TemplateBuilder: React.FC = () => {
                                 <Button
                                     variant="secondary"
                                     onClick={async () => {
+                                        if (window.confirm('SEED TEMPLATE: This will overwrite/create the Employment Reference V1 template. Continue?')) {
+                                            try {
+                                                await runGAS('seedEmploymentTemplate');
+                                                alert('Template seeded successfully!');
+                                                await loadTemplates();
+                                            } catch (e) {
+                                                alert('Seed failed: ' + e);
+                                            }
+                                        }
+                                    }}
+                                    className="bg-blue-500/20 text-blue-200 border-blue-500/30 hover:bg-blue-500/30 ml-2"
+                                >
+                                    Seed Emp. Ref
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    onClick={async () => {
                                         if (window.confirm('FIX TEMPLATE STRUCTURE: This will wipe existing templates and recreate the default one with correct structure. Continue?')) {
                                             try {
                                                 const result = await runGAS('fixTemplateStructure') as { message: string, fieldCount: number };
@@ -252,35 +271,32 @@ const TemplateBuilder: React.FC = () => {
                                 >
                                     Fix Structure
                                 </Button>
+                                {selectedTemplateId && (
+                                    <Button
+                                        variant="secondary"
+                                        onClick={async () => {
+                                            if (window.confirm('Are you sure you want to delete this template? This cannot be undone.')) {
+                                                try {
+                                                    await runGAS('deleteTemplate', selectedTemplateId);
+                                                    alert('Template deleted');
+                                                    handleNewTemplate();
+                                                    await loadTemplates();
+                                                } catch (e) {
+                                                    alert('Failed to delete template: ' + e);
+                                                }
+                                            }
+                                        }}
+                                        className="bg-white/10 text-white border-white/20 hover:bg-white/20"
+                                    >
+                                        Delete
+                                    </Button>
+                                )}
+                                <Button onClick={handleSave} disabled={isSaving}>
+                                    {isSaving ? 'Saving...' : 'Save Template'}
+                                </Button>
                             </>
-                        )}
-                        <span className="text-xs text-white/30 ml-2 block">
-                            Loaded: {templates.length}
-                        </span>
-                        {selectedTemplateId && isTemplateAdmin && (
-                            <Button
-                                variant="secondary"
-                                onClick={async () => {
-                                    if (window.confirm('Are you sure you want to delete this template? This cannot be undone.')) {
-                                        try {
-                                            await runGAS('deleteTemplate', selectedTemplateId);
-                                            alert('Template deleted');
-                                            handleNewTemplate();
-                                            await loadTemplates();
-                                        } catch (e) {
-                                            alert('Failed to delete template: ' + e);
-                                        }
-                                    }
-                                }}
-                                className="bg-white/10 text-white border-white/20 hover:bg-white/20"
-                            >
-                                Delete
-                            </Button>
-                        )}
-                        {isTemplateAdmin && (
-                            <Button onClick={handleSave} disabled={isSaving}>
-                                {isSaving ? 'Saving...' : 'Save Template'}
-                            </Button>
+                        ) : (
+                            <div className="text-white/50 text-xs italic pr-2">Editing Restricted</div>
                         )}
                         <Button variant="secondary" className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:border-white/40" onClick={logout}>
                             Sign Out
