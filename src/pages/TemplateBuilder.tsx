@@ -11,64 +11,84 @@ const TemplateBuilder: React.FC = () => {
     const { user, logout } = useAuth();
     const isTemplateAdmin = user?.email === 'rob@semester.co.uk' || user?.email === 'nicola@semester.co.uk';
 
+    // State
     const [templateName, setTemplateName] = useState('New Reference Template');
     const [fields, setFields] = useState<TemplateField[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [activeTab, setActiveTab] = useState<'builder' | 'preview'>('builder');
     const [previewMode, setPreviewMode] = useState<'mobile' | 'desktop'>('mobile');
-
     const [templates, setTemplates] = useState<Template[]>([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-    const [rawDebug, setRawDebug] = useState<unknown>('No Data Yet');
+    const [isDirty, setIsDirty] = useState(false);
+
+    // Maintenance Mode Check
+    const isMaintenanceMode = new URLSearchParams(window.location.search).get('maintenance') === 'true';
 
     // Load templates on mount
     const loadTemplates = useCallback(async () => {
-        // alert('DEBUG: Starting loadTemplates...');
         try {
             const result = await runGAS('getTemplates');
-            setRawDebug(result);
-            // alert('DEBUG: Got result: ' + JSON.stringify(result));
-            // ...
-
-            // Check if result is the array or the response wrapper
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const loadedTemplates = Array.isArray(result) ? result : (result as any).data || [];
-
             setTemplates(loadedTemplates);
-            // alert('Debug Success: Found ' + loadedTemplates.length + ' templates. First: ' + (loadedTemplates[0]?.name || 'N/A') + '\nRaw: ' + JSON.stringify(result));
-
-            // HELPFUL DEBUG & AUTO-REPAIR
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            // const meta = (result as any).meta;
-            if (loadedTemplates.length === 0) {
-                // ... keep existing ...
-            }
         } catch (error) {
             console.error("Failed to load templates", error);
-            setRawDebug({ ERROR: 'Load Failed', details: error });
-            // alert('DEBUG ERROR: Failed to load templates. ' + error);
         }
-    }, [selectedTemplateId]);
-
-
-
+    }, []);
 
     useEffect(() => {
-        alert('DEBUG: Component Mounted / Effect Running');
         loadTemplates();
     }, [loadTemplates]);
 
+    // Warn on unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isDirty) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isDirty]);
+
     const selectTemplate = (template: Template) => {
+        if (isDirty && !window.confirm('You have unsaved changes. Discard them?')) return;
+
         setTemplateName(template.name);
-        setFields(template.structureJSON);
+        setFields(template.structureJSON || []);
         setSelectedTemplateId(template.templateId);
+        setIsDirty(false);
+        setSaveStatus('idle');
     };
 
     const handleNewTemplate = () => {
         if (!isTemplateAdmin) return;
+        if (isDirty && !window.confirm('You have unsaved changes. Discard them?')) return;
+
         setTemplateName('New Reference Template');
         setFields([]);
         setSelectedTemplateId('');
+        setIsDirty(false);
+        setSaveStatus('idle');
+    };
+
+    const duplicateTemplate = () => {
+        if (!isTemplateAdmin) return;
+        if (isDirty && !window.confirm('You must save or discard changes before duplicating. Discard current changes?')) return;
+
+        setTemplateName(`Copy of ${templateName}`);
+        setSelectedTemplateId(''); // New ID on save
+        setIsDirty(true);
+        setSaveStatus('idle');
+    }
+
+    // Field Operations
+    const handleFieldChange = (newFields: TemplateField[]) => {
+        setFields(newFields);
+        setIsDirty(true);
+        setSaveStatus('idle');
     };
 
     const addField = (type: TemplateField['type']) => {
@@ -78,361 +98,414 @@ const TemplateBuilder: React.FC = () => {
             type,
             label: 'New Question',
             required: false,
-            layout: 'full' // Default to full width
+            layout: 'full'
         };
-        setFields([...fields, newField]);
+        handleFieldChange([...fields, newField]);
     };
 
     const updateField = (id: string, updates: Partial<TemplateField>) => {
         if (!isTemplateAdmin) return;
-        setFields(fields.map(f => f.id === id ? { ...f, ...updates } : f));
+        handleFieldChange(fields.map(f => f.id === id ? { ...f, ...updates } : f));
     };
 
     const removeField = (id: string) => {
         if (!isTemplateAdmin) return;
-        setFields(fields.filter(f => f.id !== id));
+        handleFieldChange(fields.filter(f => f.id !== id));
     };
 
     const moveField = (index: number, direction: 'up' | 'down') => {
         if (!isTemplateAdmin) return;
-        if (
-            (direction === 'up' && index === 0) ||
-            (direction === 'down' && index === fields.length - 1)
-        ) return;
+        if ((direction === 'up' && index === 0) || (direction === 'down' && index === fields.length - 1)) return;
 
         const newFields = [...fields];
         const targetIndex = direction === 'up' ? index - 1 : index + 1;
         [newFields[index], newFields[targetIndex]] = [newFields[targetIndex], newFields[index]];
-        setFields(newFields);
+        handleFieldChange(newFields);
     };
 
     const handleSave = async () => {
         if (!isTemplateAdmin) return;
         setIsSaving(true);
+        setSaveStatus('saving');
         try {
-            // Pass selectedTemplateId if updating, or undefined/null if new
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const result = await runGAS('saveTemplate', templateName, fields, selectedTemplateId) as any;
-
-            // If result contains the ID (which it should), update our selection state 
-            // so subsequent saves update the same record instead of creating duplicates
             if (result && result.templateId) {
                 setSelectedTemplateId(result.templateId);
             }
+            setIsDirty(false);
+            setSaveStatus('saved');
+            await loadTemplates();
 
-            alert('Template saved successfully!');
-            await loadTemplates(); // Refresh list
+            // Revert status to idle after 3s
+            setTimeout(() => setSaveStatus('idle'), 3000);
         } catch {
-            alert('Failed to save template');
+            setSaveStatus('error');
+            alert('Failed to save template. Please try again.');
         } finally {
             setIsSaving(false);
         }
     };
 
-    return (
-        <div className="min-h-screen bg-nano-gray-50 flex flex-col">
-            {/* Header */}
-            <header className="bg-semester-blue border-b border-semester-blue-dark sticky top-0 z-10 shadow-md">
-                <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+    // Maintenance Tools
+    const runMaintenanceAction = async (action: string, confirmMsg: string) => {
+        if (!window.confirm(confirmMsg)) return;
+        try {
+            await runGAS(action);
+            alert('Action completed successfully.');
+            await loadTemplates();
+        } catch (e) {
+            alert('Action failed: ' + e);
+        }
+    };
 
-                    <div className="flex items-center gap-4">
+    return (
+        <div className="min-h-screen bg-nano-gray-50 flex flex-col font-sans">
+            {/* Maintenance Banner */}
+            {isMaintenanceMode && isTemplateAdmin && (
+                <div className="bg-red-600 text-white text-xs font-bold text-center py-1 uppercase tracking-wider">
+                    ⚠️ Maintenance Mode Active - Use Tools With Caution ⚠️
+                </div>
+            )}
+
+            {/* Header */}
+            <header className="bg-semester-blue border-b border-semester-blue-dark sticky top-0 z-30 shadow-md">
+                <div className="max-w-7xl mx-auto px-6 py-3 flex justify-between items-center h-16">
+                    <div className="flex items-center gap-6">
                         <Button variant="ghost" className="text-white hover:bg-white/10" onClick={() => window.location.href = '/'}>
-                            ← Back
+                            ← Dashboard
                         </Button>
-                        <div>
-                            <Logo inverted={true} />
-                            <div className="flex items-center gap-2 mt-1 pl-10">
-                                <p className="text-sm text-blue-100">Template Builder <span className="opacity-50 text-xs ml-1">v0.0.3 + Debug</span></p>
-                                {!isTemplateAdmin && (
-                                    <span className="bg-white/10 text-white text-xs px-2 py-0.5 rounded border border-white/20">Read Only</span>
-                                )}
-                            </div>
+                        <div className="flex items-center gap-4">
+                            <Logo inverted={true} className="h-6" />
+                            <div className="h-6 w-px bg-white/20"></div>
+                            <h1 className="text-white font-medium text-lg">Template Builder</h1>
+                            {!isTemplateAdmin && (
+                                <span className="bg-white/10 text-white text-xs px-2 py-0.5 rounded border border-white/20">
+                                    Read Only
+                                </span>
+                            )}
                         </div>
                     </div>
-                    <div className="flex gap-3 items-center">
-                        <div className="mr-4">
+
+                    <div className="flex gap-4 items-center">
+                        {/* Template Selector */}
+                        <div className="relative group">
                             <select
-                                className="bg-white/10 border border-white/20 text-white text-sm rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-white/50 placeholder-white/50"
-                                style={{ colorScheme: 'dark' }}
+                                className="appearance-none bg-semester-blue-dark border border-white/20 text-white text-sm rounded-lg pl-4 pr-10 py-2 outline-none focus:ring-2 focus:ring-white/30 cursor-pointer hover:bg-semester-blue-dark/80 transition-colors min-w-[240px]"
                                 value={selectedTemplateId}
                                 onChange={(e) => {
-                                    const t = templates.find(t => t.templateId === e.target.value);
-                                    if (t) selectTemplate(t);
-                                    else handleNewTemplate();
+                                    if (e.target.value === 'new') handleNewTemplate();
+                                    else {
+                                        const t = templates.find(temp => temp.templateId === e.target.value);
+                                        if (t) selectTemplate(t);
+                                    }
                                 }}
                             >
-                                {isTemplateAdmin && <option value="" className="text-gray-900">+ Create New Template</option>}
-                                <option disabled className="text-gray-900">──────────</option>
+                                <option value="" disabled>Select a template...</option>
                                 {templates.map(t => (
-                                    <option key={t.templateId} value={t.templateId} className="text-gray-900">
+                                    <option key={t.templateId} value={t.templateId}>
                                         {t.name}
                                     </option>
                                 ))}
-                            </select>
-                        </div>
-                        <div className="flex bg-nano-gray-100 p-1 rounded-lg">
-                            <button
-                                onClick={() => setActiveTab('builder')}
-                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'builder'
-                                    ? 'bg-white text-nano-gray-900 shadow-sm'
-                                    : 'text-nano-gray-600 hover:text-nano-gray-900'
-                                    }`}
-                            >
-                                {isTemplateAdmin ? 'Editor' : 'View Structure'}
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('preview')}
-                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'preview'
-                                    ? 'bg-white text-nano-gray-900 shadow-sm'
-                                    : 'text-nano-gray-600 hover:text-nano-gray-900'
-                                    }`}
-                            >
-                                Preview
-                            </button>
-                        </div>
-                        {isTemplateAdmin ? (
-                            <>
-                                <Button
-                                    variant="secondary"
-                                    onClick={async () => {
-                                        if (window.confirm('Restore default templates? This will add the Standard Social Care Reference if missing.')) {
-                                            try {
-                                                await runGAS('initializeDatabase');
-                                                alert('Defaults restored!');
-                                                await loadTemplates();
-                                            } catch (e) {
-                                                alert('Failed to restore defaults: ' + e);
-                                            }
-                                        }
-                                    }}
-                                    className="bg-white/10 text-white border-white/20 hover:bg-white/20"
-                                >
-                                    Restore(Soft)
-                                </Button>
-                                <Button
-                                    variant="secondary"
-                                    onClick={async () => {
-                                        if (window.confirm('SEED TEMPLATE: This will overwrite/create the Employment Reference V1 template. Continue?')) {
-                                            try {
-                                                await runGAS('seedEmploymentTemplate');
-                                                alert('Template seeded successfully!');
-                                                await loadTemplates();
-                                            } catch (e) {
-                                                alert('Seed failed: ' + e);
-                                            }
-                                        }
-                                    }}
-                                    className="bg-blue-500/20 text-blue-200 border-blue-500/30 hover:bg-blue-500/30 ml-2"
-                                >
-                                    Seed Emp. Ref
-                                </Button>
-                                <Button
-                                    variant="secondary"
-                                    onClick={async () => {
-                                        if (window.confirm('FIX TEMPLATE STRUCTURE: This will wipe existing templates and recreate the default one with correct structure. Continue?')) {
-                                            try {
-                                                const result = await runGAS('fixTemplateStructure') as { message: string, fieldCount: number };
-                                                alert(`Success! ${result.message}\nFields: ${result.fieldCount}`);
-                                                await loadTemplates();
-                                            } catch (e) {
-                                                alert('Fix failed: ' + e);
-                                            }
-                                        }
-                                    }}
-                                    className="bg-green-500/20 text-green-200 border-green-500/30 hover:bg-green-500/30 ml-2"
-                                >
-                                    Fix Structure
-                                </Button>
-                                {selectedTemplateId && (
-                                    <Button
-                                        variant="secondary"
-                                        onClick={async () => {
-                                            if (window.confirm('Are you sure you want to delete this template? This cannot be undone.')) {
-                                                try {
-                                                    await runGAS('deleteTemplate', selectedTemplateId);
-                                                    alert('Template deleted');
-                                                    handleNewTemplate();
-                                                    await loadTemplates();
-                                                } catch (e) {
-                                                    alert('Failed to delete template: ' + e);
-                                                }
-                                            }
-                                        }}
-                                        className="bg-white/10 text-white border-white/20 hover:bg-white/20"
-                                    >
-                                        Delete
-                                    </Button>
+                                {isTemplateAdmin && (
+                                    <>
+                                        <option disabled>──────────</option>
+                                        <option value="new">+ Create New Template</option>
+                                    </>
                                 )}
-                                <Button onClick={handleSave} disabled={isSaving}>
-                                    {isSaving ? 'Saving...' : 'Save Template'}
-                                </Button>
-                            </>
-                        ) : (
-                            <div className="text-white/50 text-xs italic pr-2">Editing Restricted</div>
-                        )}
-                        <Button variant="secondary" className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:border-white/40" onClick={logout}>
-                            Sign Out
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white/50">
+                                ▼
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2">
+                            {isTemplateAdmin ? (
+                                <>
+                                    {selectedTemplateId && (
+                                        <Button
+                                            variant="secondary"
+                                            className="bg-white/10 text-white border-white/20 hover:bg-white/20 text-sm"
+                                            onClick={duplicateTemplate}
+                                            title="Duplicate Template"
+                                        >
+                                            Duplicate
+                                        </Button>
+                                    )}
+                                    <Button
+                                        onClick={handleSave}
+                                        disabled={!isDirty || isSaving}
+                                        className={`transition-all min-w-[100px] ${saveStatus === 'saved'
+                                            ? 'bg-green-500 hover:bg-green-600 border-green-600 text-white'
+                                            : 'bg-white text-semester-blue hover:bg-blue-50'
+                                            }`}
+                                    >
+                                        {saveStatus === 'saving' ? 'Saving...' :
+                                            saveStatus === 'saved' ? 'Saved ✓' :
+                                                'Save Changes'}
+                                    </Button>
+                                </>
+                            ) : (
+                                <div className="text-white/70 text-sm italic px-3">Editing Restricted</div>
+                            )}
+                        </div>
+                        <Button variant="ghost" className="text-white hover:bg-white/10" onClick={logout} title="Sign Out">
+                            ⏻
                         </Button>
                     </div>
                 </div>
             </header>
 
+            {/* View Toggle */}
+            <div className="bg-white border-b border-nano-gray-200">
+                <div className="max-w-7xl mx-auto px-6 py-2 flex justify-center">
+                    <div className="flex bg-nano-gray-100 p-1 rounded-lg">
+                        <button
+                            onClick={() => setActiveTab('builder')}
+                            className={`px-6 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'builder'
+                                ? 'bg-white text-semester-blue shadow-sm ring-1 ring-black/5'
+                                : 'text-nano-gray-500 hover:text-nano-gray-900'
+                                }`}
+                        >
+                            Builder
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('preview')}
+                            className={`px-6 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'preview'
+                                ? 'bg-white text-semester-blue shadow-sm ring-1 ring-black/5'
+                                : 'text-nano-gray-500 hover:text-nano-gray-900'
+                                }`}
+                        >
+                            Live Preview
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             {/* Main Content */}
             <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex gap-8">
-                {/* Editor Column */}
-                <div className={`flex-1 ${activeTab === 'preview' ? 'hidden md:block' : ''}`}>
-                    <Card className="h-full flex flex-col">
-                        <div className="p-6 border-b border-nano-gray-200">
-                            <label className="block text-sm font-medium text-nano-gray-700 mb-2">
-                                Template Name
-                            </label>
-                            <Input
-                                value={templateName}
-                                onChange={(e) => setTemplateName(e.target.value)}
-                                placeholder="e.g., Senior Developer Reference"
-                                disabled={!isTemplateAdmin}
-                            />
+
+                {/* BUILDER TAB */}
+                <div className={`flex-1 flex flex-col gap-6 ${activeTab === 'preview' ? 'hidden' : 'block'}`}>
+                    {/* Template Settings */}
+                    <Card className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="flex-1">
+                                <label className="block text-xs font-semibold text-nano-gray-500 uppercase tracking-wide mb-1">
+                                    Template Name
+                                    {isDirty && <span className="text-amber-500 ml-1" title="Unsaved changes">*</span>}
+                                </label>
+                                <Input
+                                    value={templateName}
+                                    onChange={(e) => {
+                                        setTemplateName(e.target.value);
+                                        setIsDirty(true);
+                                        setSaveStatus('idle');
+                                    }}
+                                    className="text-lg font-medium"
+                                    placeholder="e.g., Senior Developer Reference"
+                                    disabled={!isTemplateAdmin}
+                                />
+                            </div>
+                            {selectedTemplateId && isTemplateAdmin && (
+                                <div className="ml-4 pt-6">
+                                    <button
+                                        onClick={async () => {
+                                            if (window.confirm('Delete this template permanently?')) {
+                                                await runGAS('deleteTemplate', selectedTemplateId);
+                                                handleNewTemplate();
+                                                await loadTemplates();
+                                            }
+                                        }}
+                                        className="text-red-500 text-sm hover:underline hover:text-red-700"
+                                    >
+                                        Delete Template
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+
+                    {/* Fields List */}
+                    <Card className="flex-1 flex flex-col min-h-[500px]">
+                        <div className="p-4 bg-nano-gray-50 border-b border-nano-gray-200 flex justify-between items-center rounded-t-xl">
+                            <h2 className="font-semibold text-nano-gray-800">Questions & Fields</h2>
+                            <span className="text-xs text-nano-gray-500">{fields.length} items</span>
                         </div>
 
-                        <div className="p-6 flex-1 overflow-y-auto">
-                            <div className="space-y-4">
-                                {fields.map((field, index) => (
-                                    <div key={field.id} className="bg-nano-gray-50 p-4 rounded-lg border border-nano-gray-200 group">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <div className="flex items-center gap-2">
-                                                <span className="bg-white px-2 py-1 rounded text-xs font-mono text-nano-gray-500 border border-nano-gray-200 uppercase">
-                                                    {field.type}
-                                                </span>
-                                                <div className="flex flex-col">
-                                                    <button
-                                                        onClick={() => moveField(index, 'up')}
-                                                        disabled={index === 0 || !isTemplateAdmin}
-                                                        className="text-nano-gray-400 hover:text-semester-blue disabled:opacity-30 text-xs"
-                                                    >
-                                                        ▲
-                                                    </button>
-                                                    <button
-                                                        onClick={() => moveField(index, 'down')}
-                                                        disabled={index === fields.length - 1 || !isTemplateAdmin}
-                                                        className="text-nano-gray-400 hover:text-semester-blue disabled:opacity-30 text-xs"
-                                                    >
-                                                        ▼
-                                                    </button>
-                                                </div>
+                        <div className="flex-1 p-6 space-y-4 overflow-y-auto">
+                            {fields.map((field, index) => (
+                                <div key={field.id} className="bg-white p-4 rounded-xl border border-nano-gray-200 shadow-sm hover:border-semester-blue/30 transition-all group">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex flex-col gap-1">
+                                                <button
+                                                    onClick={() => moveField(index, 'up')}
+                                                    disabled={index === 0 || !isTemplateAdmin}
+                                                    className="w-6 h-6 flex items-center justify-center rounded hover:bg-nano-gray-100 text-nano-gray-400 disabled:opacity-30"
+                                                >
+                                                    ▲
+                                                </button>
+                                                <button
+                                                    onClick={() => moveField(index, 'down')}
+                                                    disabled={index === fields.length - 1 || !isTemplateAdmin}
+                                                    className="w-6 h-6 flex items-center justify-center rounded hover:bg-nano-gray-100 text-nano-gray-400 disabled:opacity-30"
+                                                >
+                                                    ▼
+                                                </button>
                                             </div>
-                                            <button
-                                                onClick={() => removeField(field.id)}
-                                                disabled={!isTemplateAdmin}
-                                                className="text-status-error opacity-0 group-hover:opacity-100 transition-opacity text-sm hover:underline disabled:hidden"
-                                            >
-                                                Remove
-                                            </button>
+                                            <span className="px-2 py-1 bg-nano-gray-100 rounded text-xs font-mono text-nano-gray-600 border border-nano-gray-200 uppercase tracking-wider">
+                                                {field.type}
+                                            </span>
+                                            {field.required && (
+                                                <span className="text-xs text-status-error font-medium bg-red-50 px-2 py-0.5 rounded-full border border-red-100">Required</span>
+                                            )}
                                         </div>
+                                        <button
+                                            onClick={() => removeField(field.id)}
+                                            disabled={!isTemplateAdmin}
+                                            className="text-gray-400 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity disabled:hidden"
+                                            title="Remove Field"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
 
-                                        <div className="space-y-3">
-                                            <div>
+                                    <div className="space-y-4 pl-9">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="col-span-2">
                                                 <label className="block text-xs font-medium text-nano-gray-500 mb-1">Question Label</label>
-                                                <input
-                                                    type="text"
-                                                    className="w-full px-3 py-2 rounded border border-nano-gray-300 focus:ring-semester-blue focus:border-semester-blue text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                                                <Input
                                                     value={field.label}
                                                     onChange={(e) => updateField(field.id, { label: e.target.value })}
                                                     disabled={!isTemplateAdmin}
+                                                    className="w-full"
                                                 />
                                             </div>
 
-                                            {/* Layout option for desktop */}
+                                            <div className="col-span-2">
+                                                <label className="block text-xs font-medium text-nano-gray-500 mb-1">Help Text (Optional)</label>
+                                                <Input
+                                                    value={field.description || ''}
+                                                    onChange={(e) => updateField(field.id, { description: e.target.value })}
+                                                    disabled={!isTemplateAdmin}
+                                                    placeholder="Additional context for the referee..."
+                                                    className="w-full text-sm"
+                                                />
+                                            </div>
+
                                             <div>
-                                                <label className="block text-xs font-medium text-nano-gray-500 mb-1">Field Width (Desktop)</label>
+                                                <label className="block text-xs font-medium text-nano-gray-500 mb-1">Width</label>
                                                 <select
-                                                    className="w-full px-3 py-2 rounded border border-nano-gray-300 focus:ring-semester-blue focus:border-semester-blue text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                                                    className="w-full px-3 py-2 bg-white rounded border border-nano-gray-300 focus:ring-semester-blue focus:border-semester-blue text-sm disabled:bg-gray-100 disabled:text-gray-500"
                                                     value={field.layout || 'full'}
                                                     onChange={(e) => updateField(field.id, { layout: e.target.value as 'full' | 'half' })}
                                                     disabled={!isTemplateAdmin}
                                                 >
                                                     <option value="full">Full Width</option>
-                                                    <option value="half">Half Width</option>
+                                                    <option value="half">Half Width (2 cols)</option>
                                                 </select>
                                             </div>
 
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    type="checkbox"
-                                                    id={`req-${field.id}`}
-                                                    checked={field.required}
-                                                    onChange={(e) => updateField(field.id, { required: e.target.checked })}
-                                                    className="rounded border-nano-gray-300 text-semester-blue focus:ring-semester-blue disabled:opacity-50"
-                                                    disabled={!isTemplateAdmin}
-                                                />
-                                                <label htmlFor={`req-${field.id}`} className="text-sm text-nano-gray-700">Required field</label>
+                                            <div className="flex items-center pt-5">
+                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={field.required}
+                                                        onChange={(e) => updateField(field.id, { required: e.target.checked })}
+                                                        disabled={!isTemplateAdmin}
+                                                        className="rounded border-nano-gray-300 text-semester-blue focus:ring-semester-blue"
+                                                    />
+                                                    <span className="text-sm text-nano-gray-700">Required Field</span>
+                                                </label>
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                </div>
+                            ))}
 
-                                {fields.length === 0 && (
-                                    <div className="text-center py-12 text-nano-gray-400 border-2 border-dashed border-nano-gray-200 rounded-lg">
-                                        <p>No fields added yet.</p>
-                                        <p className="text-sm mt-1">Click a button below to start building.</p>
-                                    </div>
-                                )}
-                            </div>
+                            {fields.length === 0 && (
+                                <div className="text-center py-16 text-nano-gray-400 border-2 border-dashed border-nano-gray-200 rounded-lg">
+                                    <p className="font-medium text-nano-gray-600">This template is empty.</p>
+                                    {isTemplateAdmin ?
+                                        <p className="text-sm mt-1">Use the toolbar below to add questions.</p> :
+                                        <p className="text-sm mt-1">Waiting for an admin to add questions.</p>
+                                    }
+                                </div>
+                            )}
                         </div>
 
+                        {/* Add Field Toolbar */}
                         {isTemplateAdmin && (
-                            <div className="p-6 border-t border-nano-gray-200 bg-nano-gray-50 rounded-b-xl">
-                                <p className="text-xs font-medium text-nano-gray-500 uppercase mb-3">Add Field</p>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                    <button
-                                        onClick={() => addField('rating')}
-                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                    >
-                                        ⭐ Rating
-                                    </button>
-                                    <button
-                                        onClick={() => addField('text')}
-                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                    >
-                                        📝 Text
-                                    </button>
-                                    <button
-                                        onClick={() => addField('boolean')}
-                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                    >
-                                        ✓ Yes/No
-                                    </button>
-                                    <button
-                                        onClick={() => addField('date')}
-                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                    >
-                                        📅 Date
-                                    </button>
-                                    <button
-                                        onClick={() => addField('textarea')}
-                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                    >
-                                        📄 Long Text
-                                    </button>
-                                    <button
-                                        onClick={() => addField('signature')}
-                                        className="px-3 py-2 bg-white border border-nano-gray-200 rounded hover:border-semester-blue hover:text-semester-blue transition-colors text-sm font-medium"
-                                    >
-                                        ✍️ Signature
-                                    </button>
+                            <div className="p-4 bg-nano-gray-50 border-t border-nano-gray-200 rounded-b-xl sticky bottom-0 z-10">
+                                <p className="text-xs font-bold text-nano-gray-400 uppercase tracking-wider mb-2">Append Field</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {[
+                                        { type: 'rating', icon: '⭐', label: 'Rating' },
+                                        { type: 'text', icon: '✍️', label: 'Short Text' },
+                                        { type: 'textarea', icon: '📝', label: 'Long Text' },
+                                        { type: 'boolean', icon: '⚡', label: 'Yes/No' },
+                                        { type: 'date', icon: '📅', label: 'Date' },
+                                        { type: 'signature', icon: '✒️', label: 'Signature' },
+                                    ].map(btn => (
+                                        <button
+                                            key={btn.type}
+                                            onClick={() => addField(btn.type as TemplateField['type'])}
+                                            className="px-3 py-2 bg-white border border-nano-gray-200 rounded-lg shadow-sm hover:border-semester-blue hover:text-semester-blue hover:shadow transition-all text-sm font-medium flex items-center gap-2"
+                                        >
+                                            <span>{btn.icon}</span>
+                                            {btn.label}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         )}
                     </Card>
+
+                    {/* Maintenance Tools (Hidden unless enabled) */}
+                    {isMaintenanceMode && isTemplateAdmin && (
+                        <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-xl">
+                            <h3 className="text-red-800 font-bold mb-4 flex items-center gap-2">
+                                <span>🛠️</span> Maintenance Tools
+                            </h3>
+                            <div className="flex gap-4">
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => runMaintenanceAction('initializeDatabase', 'Restore Defaults: This will reset templates if missing.')}
+                                    className="bg-white border-red-200 text-red-700 hover:bg-red-100"
+                                >
+                                    Soft Restore
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => runMaintenanceAction('seedEmploymentTemplate', 'SEED: Overwrite Employment Template?')}
+                                    className="bg-white border-red-200 text-red-700 hover:bg-red-100"
+                                >
+                                    Seed Emp. Ref
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => runMaintenanceAction('fixTemplateStructure', 'FIX: Wipe and recreate "Standard Social Care"?')}
+                                    className="bg-white border-red-200 text-red-700 hover:bg-red-100"
+                                >
+                                    Fix Structure
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* Preview Column */}
-                <div className={`flex-1 ${activeTab === 'builder' ? 'hidden md:block' : ''}`}>
-                    <div className="sticky top-24">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-semibold text-nano-gray-900">Live Preview</h2>
+                {/* PREVIEW TAB */}
+                <div className={`flex-1 ${activeTab === 'builder' ? 'hidden' : 'block'}`}>
+                    <div className="sticky top-24 max-w-4xl mx-auto">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 className="text-2xl font-bold text-nano-gray-900">Live Preview</h2>
+                                <p className="text-nano-gray-500 text-sm">See how it looks for referees</p>
+                            </div>
 
-                            {/* Preview Mode Toggle */}
-                            <div className="flex bg-nano-gray-100 p-1 rounded-lg">
+                            <div className="flex bg-nano-gray-200 p-1 rounded-lg">
                                 <button
                                     onClick={() => setPreviewMode('mobile')}
                                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${previewMode === 'mobile'
@@ -454,20 +527,19 @@ const TemplateBuilder: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Mobile Preview */}
-                        {previewMode === 'mobile' && (
-                            <div className="mx-auto max-w-[375px] border-[8px] border-nano-gray-800 rounded-[3rem] overflow-hidden bg-white shadow-xl h-[700px] relative">
+                        {previewMode === 'mobile' ? (
+                            <div className="mx-auto max-w-[375px] border-[8px] border-nano-gray-800 rounded-[3rem] overflow-hidden bg-white shadow-2xl h-[700px] relative ring-4 ring-gray-100">
                                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/3 h-6 bg-nano-gray-800 rounded-b-xl z-20"></div>
                                 <div className="h-full overflow-y-auto bg-nano-gray-50 scrollbar-hide">
                                     <div className="p-6 pt-12">
                                         <div className="text-center mb-6">
-                                            <h1 className="text-xl font-bold text-nano-gray-900">Semester Reference</h1>
-                                            <p className="mt-1 text-xs text-nano-gray-600">
-                                                Reference for <span className="font-semibold">Candidate Name</span>
+                                            <h1 className="text-lg font-bold text-nano-gray-900 leading-tight">Reference Request</h1>
+                                            <p className="mt-2 text-xs text-nano-gray-500">
+                                                for <span className="font-semibold text-nano-gray-900">John Doe</span>
                                             </p>
                                         </div>
 
-                                        <Card className="p-4 shadow-sm">
+                                        <Card className="p-4 shadow-sm border-0">
                                             <DynamicForm
                                                 structure={fields}
                                                 onSubmit={(data) => console.log('Preview Submit:', data)}
@@ -475,51 +547,39 @@ const TemplateBuilder: React.FC = () => {
                                             />
                                         </Card>
 
-                                        <div className="mt-6 text-center text-[10px] text-nano-gray-400">
-                                            &copy; {new Date().getFullYear()} Semester. All rights reserved.
+                                        <div className="mt-8 mb-4 text-center">
+                                            <div className="inline-flex items-center gap-1 text-[10px] text-gray-400 font-medium bg-gray-100 px-2 py-1 rounded-full">
+                                                🔒 Secured by Semester
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        )}
+                        ) : (
+                            <Card className="p-10 bg-white shadow-xl w-full border border-nano-gray-100">
+                                <div className="max-w-3xl mx-auto">
+                                    <div className="text-center mb-10 pb-8 border-b border-nano-gray-100">
+                                        <h1 className="text-3xl font-bold text-nano-gray-900 tracking-tight">Reference Request</h1>
+                                        <p className="mt-3 text-nano-gray-500">
+                                            Please provide a reference for <span className="font-semibold text-nano-gray-900">John Doe</span>
+                                        </p>
+                                    </div>
 
+                                    <DynamicForm
+                                        structure={fields}
+                                        onSubmit={(data) => console.log('Preview Submit:', data)}
+                                        previewMode="desktop"
+                                    />
+
+                                    <div className="mt-12 text-center text-xs text-nano-gray-400 pt-8 border-t border-nano-gray-100 flex justify-center items-center gap-2">
+                                        <span>🔒</span>
+                                        <span>Securely processed by Semester.co.uk</span>
+                                    </div>
+                                </div>
+                            </Card>
+                        )}
                     </div>
                 </div>
-
-                {/* VISUAL DEBUGGER */}
-                <div className="mt-8 p-4 bg-black text-green-400 font-mono text-xs rounded overflow-auto h-48 border-2 border-green-500 w-full">
-                    <h3 className="font-bold underline mb-2">VISUAL DEBUG CONSOLE</h3>
-                    <p>Template Count: {templates.length}</p>
-                    <p>Selected ID: {selectedTemplateId}</p>
-                    <p>Is Admin: {isTemplateAdmin ? 'YES' : 'NO'}</p>
-                    <p>Raw Result (Type): {typeof rawDebug}</p>
-                    <p>Raw Result (Value): {JSON.stringify(rawDebug).substring(0, 1000)}</p>
-                    <p>Templates State: {JSON.stringify(templates.map(t => t.name))}</p>
-                </div>
-
-                {/* Desktop Preview */}
-                {previewMode === 'desktop' && (
-                    <Card className="p-8 bg-white shadow-lg w-full">
-                        <div className="max-w-4xl mx-auto">
-                            <div className="text-center mb-8">
-                                <h1 className="text-3xl font-bold text-nano-gray-900">Semester Reference</h1>
-                                <p className="mt-2 text-sm text-nano-gray-600">
-                                    Reference for <span className="font-semibold">Candidate Name</span>
-                                </p>
-                            </div>
-
-                            <DynamicForm
-                                structure={fields}
-                                onSubmit={(data) => console.log('Preview Submit:', data)}
-                                previewMode="desktop"
-                            />
-
-                            <div className="mt-8 text-center text-xs text-nano-gray-400 border-t border-nano-gray-200 pt-6">
-                                &copy; {new Date().getFullYear()} Semester. All rights reserved. Secure reference processing.
-                            </div>
-                        </div>
-                    </Card>
-                )}
             </main>
         </div>
     );

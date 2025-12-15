@@ -52,6 +52,7 @@ export interface TemplateField {
     id: string;
     type: 'text' | 'textarea' | 'rating' | 'boolean' | 'date' | 'daterange' | 'signature';
     label: string;
+    description?: string; // Optional helper text for the question
     required: boolean;
     layout?: 'full' | 'half'; // Field width for desktop layouts
     options?: unknown;

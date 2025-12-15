@@ -231,6 +231,7 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
         const url = `${gasBaseUrl}${separator}action=${encodeURIComponent(functionName)}&callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
 
         // Cleanup
+        // eslint-disable-next-line prefer-const
         let timeoutId: number;
         const cleanup = () => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
