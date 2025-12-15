@@ -482,10 +482,9 @@ const TemplateBuilder: React.FC = () => {
 
                     </div>
                 </div>
-                    )}
 
                 {/* VISUAL DEBUGGER */}
-                <div className="mt-8 p-4 bg-black text-green-400 font-mono text-xs rounded overflow-auto h-48 border-2 border-green-500">
+                <div className="mt-8 p-4 bg-black text-green-400 font-mono text-xs rounded overflow-auto h-48 border-2 border-green-500 w-full">
                     <h3 className="font-bold underline mb-2">VISUAL DEBUG CONSOLE</h3>
                     <p>Template Count: {templates.length}</p>
                     <p>Selected ID: {selectedTemplateId}</p>
@@ -496,7 +495,7 @@ const TemplateBuilder: React.FC = () => {
 
                 {/* Desktop Preview */}
                 {previewMode === 'desktop' && (
-                    <Card className="p-8 bg-white shadow-lg">
+                    <Card className="p-8 bg-white shadow-lg w-full">
                         <div className="max-w-4xl mx-auto">
                             <div className="text-center mb-8">
                                 <h1 className="text-3xl font-bold text-nano-gray-900">Semester Reference</h1>
@@ -517,10 +516,8 @@ const TemplateBuilder: React.FC = () => {
                         </div>
                     </Card>
                 )}
+            </main>
         </div>
-                </div >
-            </main >
-        </div >
     );
 };
 
