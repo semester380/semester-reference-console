@@ -124,12 +124,18 @@ const TemplateBuilder: React.FC = () => {
     };
 
     const handleSave = async () => {
-        if (!isTemplateAdmin) return;
+        if (!isTemplateAdmin || !user?.email) return;
         setIsSaving(true);
         setSaveStatus('saving');
         try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const result = await runGAS('saveTemplate', templateName, fields, selectedTemplateId) as any;
+            const result = await runGAS('saveTemplate', {
+                templateName,
+                structureJSON: fields,
+                templateId: selectedTemplateId,
+                userEmail: user.email
+            }) as any;
+
             if (result && result.templateId) {
                 setSelectedTemplateId(result.templateId);
             }
@@ -149,9 +155,9 @@ const TemplateBuilder: React.FC = () => {
 
     // Maintenance Tools
     const runMaintenanceAction = async (action: string, confirmMsg: string) => {
-        if (!window.confirm(confirmMsg)) return;
+        if (!window.confirm(confirmMsg) || !user?.email) return;
         try {
-            await runGAS(action);
+            await runGAS(action, { userEmail: user.email });
             alert('Action completed successfully.');
             await loadTemplates();
         } catch (e) {
@@ -312,8 +318,8 @@ const TemplateBuilder: React.FC = () => {
                                 <div className="ml-4 pt-6">
                                     <button
                                         onClick={async () => {
-                                            if (window.confirm('Delete this template permanently?')) {
-                                                await runGAS('deleteTemplate', selectedTemplateId);
+                                            if (window.confirm('Delete this template permanently?') && user?.email) {
+                                                await runGAS('deleteTemplate', { templateId: selectedTemplateId, userEmail: user.email });
                                                 handleNewTemplate();
                                                 await loadTemplates();
                                             }

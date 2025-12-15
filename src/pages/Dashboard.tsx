@@ -11,7 +11,7 @@ import type { Request } from '../types';
 import { useAuth } from '../context/AuthContext';
 
 const Dashboard: React.FC = () => {
-    const { logout } = useAuth();
+    const { user, logout } = useAuth();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
     const [requests, setRequests] = useState<Request[]>([]);
@@ -32,13 +32,14 @@ const Dashboard: React.FC = () => {
     const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
 
     const loadRequests = React.useCallback(() => {
+        if (!user?.email) return;
         setIsLoading(true);
         console.log('[Dashboard] Loading requests via callback API...');
 
         // Use callback-based API to bypass Promise resolution issues
         runGASCallback(
             'getMyRequests',
-            { includeArchived: true },
+            { includeArchived: true, userEmail: user.email },
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (response: any) => {
                 console.log('[Dashboard] Data received:', response);
@@ -58,12 +59,14 @@ const Dashboard: React.FC = () => {
                 setIsLoading(false);
             }
         );
-    }, []);
+    }, [user?.email]);
 
     // Fetch requests on load
     useEffect(() => {
-        loadRequests();
-    }, [loadRequests]);
+        if (user?.email) {
+            loadRequests();
+        }
+    }, [loadRequests, user?.email]);
 
     const calculateStats = (data: Request[]) => {
         const activeRequests = data.filter(r => !r.archived);
@@ -91,6 +94,8 @@ const Dashboard: React.FC = () => {
     };
 
     const handleCreateRequest = async (formData: { candidateName: string; candidateEmail: string; refereeName: string; refereeEmail: string; templateId?: string }) => {
+        if (!user?.email) return;
+
         // Optimistic Update
         const tempId = 'temp-' + Date.now();
         const newRequest: Request = {
@@ -116,7 +121,8 @@ const Dashboard: React.FC = () => {
                 candidateEmail: formData.candidateEmail,
                 refereeName: formData.refereeName,
                 refereeEmail: formData.refereeEmail,
-                templateId: formData.templateId || 'standard-social-care'
+                templateId: formData.templateId || 'standard-social-care',
+                userEmail: user.email
             }) as { success: boolean; requestId: string; error?: string };
 
             if (result.success) {
@@ -139,11 +145,11 @@ const Dashboard: React.FC = () => {
 
     // Bulk action handlers
     const handleArchiveSelected = async () => {
-        if (selectedIds.size === 0) return;
+        if (selectedIds.size === 0 || !user?.email) return;
 
         setIsBulkActionLoading(true);
         try {
-            const result = await runGAS('archiveRequests', Array.from(selectedIds)) as { success: boolean; archivedCount?: number; error?: string };
+            const result = await runGAS('archiveRequests', { requestIds: Array.from(selectedIds), userEmail: user.email }) as { success: boolean; archivedCount?: number; error?: string };
 
             if (result.success) {
                 showSuccessToast(`✓ Archived ${result.archivedCount || selectedIds.size} request(s)`);
@@ -160,11 +166,11 @@ const Dashboard: React.FC = () => {
     };
 
     const handleUnarchiveSelected = async () => {
-        if (selectedIds.size === 0) return;
+        if (selectedIds.size === 0 || !user?.email) return;
 
         setIsBulkActionLoading(true);
         try {
-            const result = await runGAS('unarchiveRequests', Array.from(selectedIds)) as { success: boolean; unarchivedCount?: number; error?: string };
+            const result = await runGAS('unarchiveRequests', { requestIds: Array.from(selectedIds), userEmail: user.email }) as { success: boolean; unarchivedCount?: number; error?: string };
 
             if (result.success) {
                 showSuccessToast(`✓ Unarchived ${result.unarchivedCount || selectedIds.size} request(s)`);
@@ -181,7 +187,7 @@ const Dashboard: React.FC = () => {
     };
 
     const handleDeleteSelected = async () => {
-        if (selectedIds.size === 0) return;
+        if (selectedIds.size === 0 || !user?.email) return;
 
         // Confirm before delete
         const confirmed = window.confirm(
@@ -194,7 +200,7 @@ const Dashboard: React.FC = () => {
 
         setIsBulkActionLoading(true);
         try {
-            const result = await runGAS('deleteRequests', Array.from(selectedIds)) as {
+            const result = await runGAS('deleteRequests', { requestIds: Array.from(selectedIds), userEmail: user.email }) as {
                 success: boolean;
                 deletedCount?: number;
                 skippedCount?: number;
