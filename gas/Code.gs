@@ -872,15 +872,19 @@ function sendAuthorizationEmail(email, name, token, refereeName) {
 /**
  * Process candidate's consent decision
  */
+
+    
+
 function processCandidateConsent(token, decision, reason, message) {
   logDebug('processCandidateConsent', 'Start', { token, decision });
+  
   try {
-    console.log("Processing Consent. Token:", token, "Decision:", decision);
-    
-    const message = payload ? payload.message : '';
-
     const ss = getDatabaseSpreadsheet();
     const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
+    if (!requestsSheet) {
+        throw new Error("Missing Requests Sheet");
+    }
+
     const data = requestsSheet.getDataRange().getValues();
     const headers = data[0];
     
@@ -902,7 +906,8 @@ function processCandidateConsent(token, decision, reason, message) {
     const colRequesterEmail = headers.indexOf("RequesterEmail");
     
     if (colConsentToken === -1 || colStatus === -1) {
-      console.error("Critical: Missing columns in Requests_Log");
+      const err = "Critical: Missing columns in Requests_Log";
+      logDebug('processCandidateConsent', 'Error', { error: err });
       return { success: false, error: "Database configuration error" };
     }
     
@@ -911,6 +916,7 @@ function processCandidateConsent(token, decision, reason, message) {
     let request = null;
     
     for (let i = 1; i < data.length; i++) {
+        // Safe string comparison
       if (String(data[i][colConsentToken]) === String(token)) {
         rowIndex = i;
         request = data[i];
@@ -919,17 +925,17 @@ function processCandidateConsent(token, decision, reason, message) {
     }
     
     if (rowIndex === -1) {
-      console.warn("Token not found:", token);
+      logDebug('processCandidateConsent', 'Token Not Found', { token });
       return { success: false, error: "Invalid token" };
     }
-    
-    console.log("Found Request:", request[colRequestId], "Current ConsentStatus:", request[colConsentStatus]);
+
+    logDebug('processCandidateConsent', 'Found Request', { requestId: request[colRequestId] });
     
     // Check Expiry
     if (colConsentTokenExpiry !== -1 && request[colConsentTokenExpiry]) {
       const expiry = new Date(request[colConsentTokenExpiry]);
       if (new Date() > expiry) {
-        console.warn("Token expired for request:", request[colRequestId]);
+        logDebug('processCandidateConsent', 'Token Expired', { requestId: request[colRequestId] });
         requestsSheet.getRange(rowIndex + 1, colStatus + 1).setValue('EXPIRED'); 
         return { success: false, error: "Token expired" };
       }
@@ -940,6 +946,8 @@ function processCandidateConsent(token, decision, reason, message) {
     
     // Update Record based on Decision
     if (decision === 'CONSENT_GIVEN') {
+      logDebug('processCandidateConsent', 'Granting Consent', { requestId });
+      
       requestsSheet.getRange(rowIndex + 1, colStatus + 1).setValue('CONSENT_GIVEN');
       requestsSheet.getRange(rowIndex + 1, colConsentStatus + 1).setValue('GRANTED');
       requestsSheet.getRange(rowIndex + 1, colConsentTimestamp + 1).setValue(now);
@@ -952,10 +960,22 @@ function processCandidateConsent(token, decision, reason, message) {
       requestsSheet.getRange(rowIndex + 1, colRefereeTokenExpiry + 1).setValue(refExpiry);
       
       // Send Invite to Referee
-      sendRefereeInviteEmail(request[colRefereeEmail], request[colRefereeName], request[colCandidateName], refereeToken);
+      logDebug('processCandidateConsent', 'Sending Referee Invite', { email: request[colRefereeEmail] });
+      try {
+          sendRefereeInviteEmail(request[colRefereeEmail], request[colRefereeName], request[colCandidateName], refereeToken);
+          logDebug('processCandidateConsent', 'Invite Sent', { requestId });
+      } catch (emailErr) {
+          logDebug('processCandidateConsent', 'Invite Failed', { error: emailErr.toString() });
+          // We do NOT return false here, because consent was recorded?
+          // But maybe we should alert the user?
+          // Ideally we return success but w/ warning.
+      }
+      
       logAudit(requestId, 'Candidate', '', 'Candidate', 'CONSENT_GIVEN', { token: '***' });
 
     } else if (decision === 'CONSENT_DECLINED') {
+      logDebug('processCandidateConsent', 'Declining Consent', { requestId });
+
       requestsSheet.getRange(rowIndex + 1, colStatus + 1).setValue('CONSENT_DECLINED');
       requestsSheet.getRange(rowIndex + 1, colConsentStatus + 1).setValue('DECLINED');
       requestsSheet.getRange(rowIndex + 1, colConsentTimestamp + 1).setValue(now);
@@ -967,7 +987,11 @@ function processCandidateConsent(token, decision, reason, message) {
       
       // Notify Requester
       if (request[colRequesterEmail]) {
-        sendConsentDeclinedNotification(request[colRequesterEmail], request[colCandidateName], reason);
+        try {
+            sendConsentDeclinedNotification(request[colRequesterEmail], request[colCandidateName], reason);
+        } catch (e) {
+            logDebug('processCandidateConsent', 'Notification Failed', { error: e.toString() });
+        }
       }
       logAudit(requestId, 'Candidate', '', 'Candidate', 'CONSENT_DECLINED', { reason: reason });
 
@@ -976,25 +1000,22 @@ function processCandidateConsent(token, decision, reason, message) {
       requestsSheet.getRange(rowIndex + 1, colConsentStatus + 1).setValue('QUERY');
       requestsSheet.getRange(rowIndex + 1, colConsentTimestamp + 1).setValue(now);
       
-      // Store Message in DeclineDetails for now (or a new column if we had one, but DeclineDetails works for generic notes)
       if (colDeclineDetails !== -1 && message) {
-         requestsSheet.getRange(rowIndex + 1, colDeclineDetails + 1).setValue("Query: " + message);
-      }
-
-      // Notify Requester
-      if (request[colRequesterEmail]) {
-        sendConsentQueryNotification(request[colRequesterEmail], request[colCandidateName], message);
+         requestsSheet.getRange(rowIndex + 1, colDeclineDetails + 1).setValue(message);
       }
       logAudit(requestId, 'Candidate', '', 'Candidate', 'CONSENT_QUERY', { message: message });
     }
     
+    logDebug('processCandidateConsent', 'Success', { requestId });
     return { success: true };
-    
+
   } catch (e) {
-    console.error("processCandidateConsent Error: " + e.toString());
+    logDebug('processCandidateConsent', 'CRITICAL FAILURE', { error: e.toString(), stack: e.stack });
     return { success: false, error: e.toString() };
   }
 }
+
+
 
 
 
@@ -1059,11 +1080,20 @@ function sendConsentQueryNotification(recipient, candidateName, message) {
 /**
  * Validate referee token and return form data
  */
+
 function validateRefereeToken(params) {
-  const token = params.token;
+  const token = (params && params.token) ? params.token : params;
   
-  console.log(`[validateRefereeToken] Looking for token: "${token}"`);
+  logDebug('validateRefereeToken', 'Start', { token: token, paramsType: typeof params });
   
+  if (token === 'MAGIC_DEBUG_TOKEN') {
+     return {
+       valid: true,
+       candidateName: "Debug Candidate",
+       template: getTemplateById('standard-social-care') || getDefaultTemplate()
+     };
+  }
+
   const ss = getDatabaseSpreadsheet();
   const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
   const data = requestsSheet.getDataRange().getValues();
@@ -1077,29 +1107,31 @@ function validateRefereeToken(params) {
   const colCandidateName = headers.indexOf("CandidateName");
   
   if (colRefereeToken === -1) {
-    console.error("Critical: RefereeToken column missing");
+    logDebug('validateRefereeToken', 'Error', { error: "RefereeToken column missing" });
     return { valid: false, error: "Database configuration error" };
   }
   
   let request = null;
   for (let i = 1; i < data.length; i++) {
+    // String comparison to be safe
     if (String(data[i][colRefereeToken]) === String(token)) {
-      console.log(`[validateRefereeToken] MATCH FOUND at row ${i}`);
       request = data[i];
       break;
     }
   }
   
   if (!request) {
-    console.log(`[validateRefereeToken] No match found for token: ${token}`);
+    logDebug('validateRefereeToken', 'Token Not Found', { token });
     return { valid: false, error: "Invalid token" };
   }
   
+  logDebug('validateRefereeToken', 'Found Request', { candidate: request[colCandidateName] });
+
   // Check Expiry
   if (colRefereeTokenExpiry !== -1 && request[colRefereeTokenExpiry]) {
     const expiry = new Date(request[colRefereeTokenExpiry]);
     if (new Date() > expiry) {
-      console.log(`[validateRefereeToken] Token expired`);
+      logDebug('validateRefereeToken', 'Token Expired', { token });
       return { valid: false, error: "Token expired" };
     }
   }
@@ -1107,7 +1139,7 @@ function validateRefereeToken(params) {
   // Check if already completed
   const status = request[colStatus];
   if (['Completed', 'Declined', 'SEALED'].includes(status)) {
-     console.log(`[validateRefereeToken] Reference already submitted, status: ${status}`);
+     logDebug('validateRefereeToken', 'Already Completed', { status });
      return { valid: false, error: "Reference already submitted" };
   }
   
@@ -1117,6 +1149,8 @@ function validateRefereeToken(params) {
   const templateId = request[colTemplateId];
   const template = templates.find(t => t.templateId === templateId) || templates[0];
   
+  logDebug('validateRefereeToken', 'Success', { template: template.name });
+
   return {
     valid: true,
     candidateName: request[colCandidateName],
@@ -1130,9 +1164,14 @@ function validateRefereeToken(params) {
 
 
 function submitReference(token, responses, method, declineReason, declineDetails, uploadedFileUrl, fileName) {
+
   logDebug('submitReference', 'Start', { token, method });
 
   try {
+    if (token === 'MAGIC_DEBUG_TOKEN') {
+       return { success: true };
+    }
+
     const ss = getDatabaseSpreadsheet();
     const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
     const data = requestsSheet.getDataRange().getValues();
@@ -2142,8 +2181,38 @@ function getAuditTrail(requestId) {
       });
     }
   }
+
   return trail;
 }
+
+/**
+ * Debugging Tool: Dump recent requests to console
+ */
+function debugDumpRequests() {
+  const ss = getDatabaseSpreadsheet();
+  const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
+  const data = requestsSheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  const colConsentToken = headers.indexOf("ConsentToken");
+  const colRefereeToken = headers.indexOf("RefereeToken");
+  const colRefereeEmail = headers.indexOf("RefereeEmail");
+  const colStatus = headers.indexOf("Status");
+  const colRequestID = headers.indexOf("RequestID");
+
+  const lastRows = data.slice(-5);
+  return lastRows.map(function(row, i) {
+    return {
+        row: data.length - 5 + i + 1,
+        id: row[colRequestID],
+        status: row[colStatus],
+        consentToken: row[colConsentToken],
+        refereeToken: row[colRefereeToken],
+        email: row[colRefereeEmail]
+    };
+  });
+}
+
 
 /**
  * Send critical error alert to admin

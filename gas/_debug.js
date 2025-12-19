@@ -15,3 +15,26 @@ function testDebugEmail() {
         return "Error: " + e.toString();
     }
 }
+
+function debugDumpRequests() {
+    const ss = getDatabaseSpreadsheet();
+    const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
+    const data = requestsSheet.getDataRange().getValues();
+    const headers = data[0];
+
+    const colConsentToken = headers.indexOf("ConsentToken");
+    const colRefereeToken = headers.indexOf("RefereeToken");
+    const colRefereeEmail = headers.indexOf("RefereeEmail");
+    const colStatus = headers.indexOf("Status");
+    const colRequestID = headers.indexOf("RequestID");
+
+    const lastRows = data.slice(-5);
+    return lastRows.map((row, i) => ({
+        row: data.length - 5 + i + 1,
+        id: row[colRequestID],
+        status: row[colStatus],
+        consentToken: row[colConsentToken],
+        refereeToken: row[colRefereeToken],
+        email: row[colRefereeEmail]
+    }));
+}

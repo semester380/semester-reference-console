@@ -50,7 +50,7 @@ export interface Template {
 
 export interface TemplateField {
     id: string;
-    type: 'text' | 'textarea' | 'rating' | 'boolean' | 'date' | 'daterange' | 'signature';
+    type: 'text' | 'textarea' | 'rating' | 'boolean' | 'date' | 'daterange' | 'signature' | 'email';
     label: string;
     description?: string; // Optional helper text for the question
     required: boolean;

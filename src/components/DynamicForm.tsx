@@ -85,20 +85,32 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
 
         const fieldContent = (() => {
             switch (field.type) {
+
                 case 'text':
+                case 'email':
                 case 'textarea':
                     return (
                         <>
                             <label className="block text-sm font-semibold text-nano-gray-700 mb-2 tracking-wide">
                                 {field.label} {field.required && <span className="text-status-error">*</span>}
                             </label>
-                            <textarea
-                                className={`input ${error ? '!border-status-error focus:!ring-status-error/20' : ''} ${field.type === 'textarea' ? 'min-h-[120px]' : 'min-h-[52px]'}`}
-                                value={(responses[field.id] as string) || ''}
-                                onChange={(e) => handleChange(field.id, e.target.value)}
-                                placeholder="Type your answer here..."
-                                rows={field.type === 'textarea' ? 5 : 1}
-                            />
+                            {field.type === 'textarea' ? (
+                                <textarea
+                                    className={`input ${error ? '!border-status-error focus:!ring-status-error/20' : ''} min-h-[120px]`}
+                                    value={(responses[field.id] as string) || ''}
+                                    onChange={(e) => handleChange(field.id, e.target.value)}
+                                    placeholder="Type your answer here..."
+                                    rows={5}
+                                />
+                            ) : (
+                                <input
+                                    type={field.type}
+                                    className={`input ${error ? '!border-status-error focus:!ring-status-error/20' : ''} min-h-[52px]`}
+                                    value={(responses[field.id] as string) || ''}
+                                    onChange={(e) => handleChange(field.id, e.target.value)}
+                                    placeholder={field.type === 'email' ? 'name@example.com' : 'Type your answer here...'}
+                                />
+                            )}
                             {error && <p className="mt-1 text-sm text-status-error">{error}</p>}
                         </>
                     );
