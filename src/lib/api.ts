@@ -195,8 +195,7 @@ const mockGAS = {
  */
 
 // Production v96 - SECURE + TEMPLATE SEEDED + RBAC
-const GAS_DEPLOYMENT_ID = 'AKfycbzH8Cbgot_NYyEY0E_Mj19xkNDv67o81b3wXCU_jYOODAKIMmJQb3q8ciujoaF0zVve';
-const gasBaseUrl = `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
+const gasBaseUrl = import.meta.env.VITE_GAS_BASE_URL;
 
 export const runGAS = (functionName: string, ...args: unknown[]) => {
     return new Promise((resolve, reject) => {
@@ -220,8 +219,8 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
         const jsonPayload = JSON.stringify({
             action: functionName,
             ...argsMap,
-            // Add admin key if needed (simulated for auth context)
-            adminKey: 'uO4KpB7Zx9qL1Fs8cYp3rN5wD2mH6vQ0TgE9jS4aB8kR1nC5uL7zX2pY6'
+            // Add admin key from env
+            adminKey: import.meta.env.VITE_ADMIN_API_KEY
         });
 
         // JSONP Implementation
