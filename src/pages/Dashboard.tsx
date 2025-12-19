@@ -249,14 +249,25 @@ const Dashboard: React.FC = () => {
                 </div>
             )}
 
-            {/* Header */}
             <Header user={user} onSignOut={logout}>
-                <Button
-                    onClick={() => setIsModalOpen(true)}
-                    className="bg-semester-blue text-white hover:bg-semester-blue-dark font-medium shadow-sm border-none flex items-center gap-2"
-                >
-                    <span className="text-lg leading-none">+</span> New Request
-                </Button>
+                <div className="flex items-center gap-2">
+                    {/* Template Builder Access - Admin & Nicola Only */}
+                    {(user?.role === 'Admin' || user?.email === 'nicola@semester.co.uk') && (
+                        <Button
+                            variant="ghost"
+                            onClick={() => window.location.href = '/template-builder'}
+                            className="text-nano-gray-600 hover:text-semester-blue font-medium"
+                        >
+                            Templates
+                        </Button>
+                    )}
+                    <Button
+                        onClick={() => setIsModalOpen(true)}
+                        className="bg-semester-blue text-white hover:bg-semester-blue-dark font-medium shadow-sm border-none flex items-center gap-2"
+                    >
+                        <span className="text-lg leading-none">+</span> New Request
+                    </Button>
+                </div>
             </Header>
 
             {/* Main Content */}
