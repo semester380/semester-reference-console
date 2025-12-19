@@ -33,11 +33,11 @@ export const SignaturePadField: React.FC<SignaturePadFieldProps> = ({
     const handleEnd = () => {
         if (sigCanvas.current && !sigCanvas.current.isEmpty()) {
             setHasDrawn(true);
-            updateSignature();
+            updateSignature(true);
         }
     };
 
-    const updateSignature = () => {
+    const updateSignature = (isDrawnOverride?: boolean) => {
         if (!sigCanvas.current) return;
 
         const dataUrl = sigCanvas.current.toDataURL();
@@ -47,10 +47,12 @@ export const SignaturePadField: React.FC<SignaturePadFieldProps> = ({
             setSignedAt(timestamp);
         }
 
+        const isDrawn = isDrawnOverride !== undefined ? isDrawnOverride : hasDrawn;
+
         onChange({
             typedName,
             signedAt: timestamp,
-            signatureDataUrl: hasDrawn ? dataUrl : undefined
+            signatureDataUrl: isDrawn ? dataUrl : undefined
         });
     };
 
