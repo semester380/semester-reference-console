@@ -164,10 +164,10 @@ const mockGAS = {
             }, 800);
         });
     },
-    analyzeReference: (requestId: string) => {
+    analyseReference: (requestId: string) => {
         return new Promise((resolve) => {
             setTimeout(() => {
-                console.log('[Mock] Analyzing reference:', requestId);
+                console.log('[Mock] Analysing reference:', requestId);
                 resolve({
                     success: true,
                     analysis: MOCK_AI_ANALYSIS

@@ -316,16 +316,16 @@ function handleApiRequest(e) {
       'submitReference', 'uploadReferenceDocument', 'getTemplates', 
       'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
       'submitReference', 'uploadReferenceDocument', 'getTemplates', 
-      'authorizeConsent', 'getDefaultTemplate', 'inspectTemplates',
-      'verifyStaff'
+      'authorizeConsent', 'authoriseConsent', 'getDefaultTemplate', 'inspectTemplates',
+      'verifyStaff', 'testGemini', 'runCompleteE2ETest', 'runQA', 'resetTemplates'
     ];
     
     const adminOnlyEndpoints = [
       'archiveRequests', 'unarchiveRequests', 'deleteRequests', 
-      'runSmartChase', 'runAnalysis', 'listStaff', 'addStaff', 
+      'runSmartChase', 'runAnalysis', 'analyseReference', 'listStaff', 'addStaff', 
       'updateStaff', 'deactivateStaff', 
-      'initializeDatabase', 'resetTemplates', 'fixTemplateStructure', 'seedEmploymentTemplate', 'sealRequest', 'diagnoseConfig', 'fixPermissions', 'backfillTokens',
-      'runCompleteE2ETest', 'runQA', 'saveTemplate', 'deleteTemplate'
+      'initializeDatabase', 'fixTemplateStructure', 'seedEmploymentTemplate', 'sealRequest', 'diagnoseConfig', 'fixPermissions', 'backfillTokens',
+      'saveTemplate', 'deleteTemplate'
     ];
     
     const staffEndpoints = [
@@ -366,7 +366,8 @@ function handleApiRequest(e) {
       case 'submitReference':
         result = submitReference(payload.token, payload.responses, payload.method, payload.declineReason, payload.declineDetails, payload.uploadedFileUrl, payload.fileName);
         break;
-      case 'authorizeConsent':
+      case 'authorizeConsent': // Legacy Fallback
+      case 'authoriseConsent':
         result = processCandidateConsent(payload.token, payload.decision);
         break;
       case 'uploadReferenceDocument':
@@ -393,9 +394,11 @@ function handleApiRequest(e) {
 
 
       case 'runCompleteE2ETest':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
         result = runCompleteE2ETest();
         break;
       case 'runQA':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
         result = runQA();
         break;
 
@@ -418,6 +421,7 @@ function handleApiRequest(e) {
         result = initializeDatabase();
         break;
       case 'resetTemplates':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
         result = resetTemplates();
         break;
       case 'fixTemplateStructure':
@@ -425,6 +429,12 @@ function handleApiRequest(e) {
         break;
       case 'backfillTokens':
         result = backfillTokens();
+        break;
+      case 'testGemini':
+        if (!isAdminRequest(e)) {
+           throw new Error('Unauthorized: Missing valid admin key');
+        }
+        result = { success: true, result: testGeminiConfiguration() };
         break;
       case 'saveTemplate':
         result = saveTemplate(payload.templateName, payload.structureJSON, payload.templateId, staff);
@@ -447,8 +457,9 @@ function handleApiRequest(e) {
       case 'runSmartChase':
         result = runSmartChase(staff);
         break;
-      case 'runAnalysis':
-        result = analyzeReference(payload.requestId, staff);
+      case 'runAnalysis': // Legacy
+      case 'analyseReference':
+        result = analyseReference(payload.requestId, staff);
         break;
       case 'sealRequest':
         result = sealRequest(payload.requestId, staff);
@@ -808,8 +819,8 @@ function initiateRequest(requestData, staff) {
       referee: requestData.refereeEmail 
     });
     
-    // 5. Send Authorization Email
-    sendAuthorizationEmail(requestData.candidateEmail, requestData.candidateName, consentToken, requestData.refereeName);
+    // 5. Send Authorisation Email
+    sendAuthorisationEmail(requestData.candidateEmail, requestData.candidateName, consentToken, requestData.refereeName);
     
     return { success: true, requestId: requestId };
     
@@ -829,7 +840,7 @@ function initiateRequest(requestData, staff) {
  * Send authorization email to candidate
  */
 
-function sendAuthorizationEmail(email, name, token, refereeName) {
+function sendAuthorisationEmail(email, name, token, refereeName) {
   logDebug('sendAuthorizationEmail', 'Start', { email, name, refereeName });
   
   // FIXED: Hardcode Production URL to avoid Vercel preview auth issues
@@ -1590,7 +1601,7 @@ function saveTemplate(name, structure, templateId, staff) {
 
 // --- AI & Analysis ---
 
-function analyzeReference(requestId, staff) {
+function analyseReference(requestId, staff) {
   // Call the function in AI.gs
   // We need to expose it here or import it. 
   // Since they are in the same project, we can call it directly if it's global.
@@ -1611,11 +1622,11 @@ function analyzeReference(requestId, staff) {
   }
   
   // Call AI module
-  if (typeof analyzeSentimentAndAnomalies === 'function') {
-    const analysis = analyzeSentimentAndAnomalies(requestId, request.responses);
+  if (typeof analyseSentimentAndAnomalies === 'function') {
+    const analysis = analyseSentimentAndAnomalies(requestId, request.responses);
     return { success: true, analysis: analysis };
   } else {
-    Logger.log('Error: analyzeSentimentAndAnomalies function not found');
+    Logger.log('Error: analyseSentimentAndAnomalies function not found');
     return { success: false, error: "AI module not loaded" };
   }
 }

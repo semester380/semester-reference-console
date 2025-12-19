@@ -36,7 +36,7 @@ const RefereePortal: React.FC = () => {
             return;
         }
 
-        if (action === 'authorize') {
+        if (action === 'authorize' || action === 'authorise') {
             setView('consent');
             setIsLoading(false);
         } else {
@@ -175,7 +175,7 @@ const RefereePortal: React.FC = () => {
         const token = params.get('token');
 
         try {
-            const result = await runGAS('authorizeConsent', { token, decision, ...payload }) as { success: boolean; error?: string };
+            const result = await runGAS('authoriseConsent', { token, decision, ...payload }) as { success: boolean; error?: string };
             if (result.success) {
                 if (decision === 'CONSENT_GIVEN') {
                     setSuccessMessage('Thank you. Your consent has been recorded and an invitation has been sent to your referee.');

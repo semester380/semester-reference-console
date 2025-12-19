@@ -126,9 +126,33 @@ function runCompleteE2ETest() {
        console.log('❌ Failed to submit reference:', submissionResult.error);
     }
     
+    
+    // STEP 7: Seal Request
+    console.log('\nSTEP 7: Sealing Request...');
+    const sealResult = sealRequest(requestId, null);
+    if (sealResult.success) {
+       console.log('✅ Request Sealed! PDF URL:', sealResult.pdfUrl);
+    } else {
+       console.log('❌ Seal Failed:', sealResult.error);
+    }
+
+    // STEP 8: AI Analysis
+    console.log('\nSTEP 8: Running AI Analysis...');
+    const aiResult = analyseReference(requestId, null);
+    if (aiResult.success) {
+       console.log('✅ AI Analysis Run:', aiResult.sentimentScore || 'Success');
+       if (aiResult.summary) console.log('Summary:', JSON.stringify(aiResult.summary));
+    } else {
+       console.log('❌ AI Failed:', aiResult.error);
+       // Don't fail the whole test for AI as it depends on key
+    }
+
     return {
        success: true,
-       message: "Full E2E Test Completed incl. Submission"
+       message: "Full E2E Test Completed incl. Submission, Seal, and AI",
+       requestId: requestId,
+       pdfUrl: sealResult.pdfUrl,
+       aiSentiment: aiResult.sentimentScore
     };
 
   } catch (e) {

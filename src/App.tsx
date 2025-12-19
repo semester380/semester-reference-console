@@ -16,7 +16,7 @@ const ProtectedApp: React.FC = () => {
 
     // Check query params
     const params = new URLSearchParams(window.location.search);
-    if (params.get('action') === 'authorize') return 'portal';
+    if (params.get('action') === 'authorize' || params.get('action') === 'authorise') return 'portal';
 
     return params.get('view') || 'dashboard';
   });
@@ -31,7 +31,7 @@ const ProtectedApp: React.FC = () => {
       let newView = 'dashboard';
       if (path.includes('/referee-portal') || path.includes('/consent')) newView = 'portal';
       else if (path.includes('/template-builder')) newView = 'builder';
-      else if (actionParam === 'authorize') newView = 'portal';
+      else if (actionParam === 'authorize' || actionParam === 'authorise') newView = 'portal';
       else if (viewParam) newView = viewParam;
 
       setView(newView);

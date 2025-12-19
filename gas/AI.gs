@@ -5,12 +5,12 @@
  */
 
 /**
- * Analyze sentiment and detect anomalies using Gemini API
+ * Analyse sentiment and detect anomalies using Gemini API
  * @param {string} requestId - Request ID
  * @param {Object} formData - Submitted form data
  * @returns {Object} Analysis results
  */
-function analyzeSentimentAndAnomalies(requestId, formData) {
+function analyseSentimentAndAnomalies(requestId, formData) {
   try {
     const geminiApiKey = PropertiesService.getScriptProperties().getProperty('GeminiAPIKey');
     
@@ -38,198 +38,15 @@ function analyzeSentimentAndAnomalies(requestId, formData) {
     
     return Object.assign({ configured: true }, analysis);
   } catch (error) {
-    Logger.log('Error in analyzeSentimentAndAnomalies: ' + error.toString());
+    Logger.log('Error in analyseSentimentAndAnomalies: ' + error.toString());
     return {
       configured: true,
       sentimentScore: 'Error',
-      summary: ['Error analyzing reference: ' + error.toString()],
+      summary: ['Error analysing reference: ' + error.toString()],
       anomalies: []
     };
   }
 }
-
-/**
- * Save full AI analysis results to AI_Results sheet
- * @param {string} requestId - Request ID
- * @param {Object} analysis - Analysis results
- */
-function saveAIResults(requestId, analysis) {
-  try {
-    const ss = getDatabaseSpreadsheet();
-    let aiSheet = ss.getSheetByName('AI_Results');
-    
-    // Create sheet if it doesn't exist (should be created by init, but safety first)
-    if (!aiSheet) {
-      aiSheet = ss.insertSheet('AI_Results');
-      aiSheet.appendRow(['RequestID', 'Sentiment', 'Summary', 'AnomaliesJSON', 'Timestamp']);
-      aiSheet.setFrozenRows(1);
-    }
-    
-    const timestamp = new Date();
-    const summaryJson = JSON.stringify(analysis.summary || []);
-    const anomaliesJson = JSON.stringify(analysis.anomalies || []);
-    
-    // Check if record exists and update, or append
-    const data = aiSheet.getDataRange().getValues();
-    let found = false;
-    
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === requestId) {
-        aiSheet.getRange(i + 1, 2).setValue(analysis.sentimentScore);
-        aiSheet.getRange(i + 1, 3).setValue(summaryJson);
-        aiSheet.getRange(i + 1, 4).setValue(anomaliesJson);
-        aiSheet.getRange(i + 1, 5).setValue(timestamp);
-        found = true;
-        break;
-      }
-    }
-    
-    if (!found) {
-      aiSheet.appendRow([
-        requestId, 
-        analysis.sentimentScore, 
-        summaryJson, 
-        anomaliesJson, 
-        timestamp
-      ]);
-    }
-    
-  } catch (e) {
-    Logger.log('Error saving AI results: ' + e.toString());
-  }
-}
-
-/**
- * Extract text content from form data
- * @param {Object} formData - Form data
- * @returns {string} Combined text content
- */
-function extractTextContent(formData) {
-  let textContent = '';
-  
-  for (const key in formData) {
-    if (typeof formData[key] === 'string' && formData[key].length > 20) {
-      textContent += formData[key] + '\n\n';
-    }
-  }
-  
-  return textContent;
-}
-
-/**
- * Call Gemini API for analysis
- * @param {string} apiKey - Gemini API key
- * @param {string} textContent - Text to analyze
- * @param {Object} formData - Full form data for anomaly detection
- * @returns {Object} Analysis results
- */
-function callGeminiAPI(apiKey, textContent, formData) {
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
-  
-  const prompt = `
-Analyze the following employment reference and provide:
-1. Overall sentiment (Highly Positive, Positive, Neutral, Cautionary, Negative)
-2. Three key bullet points summarizing strengths and weaknesses
-3. Any red flags or concerning patterns
-
-Reference text:
-${textContent}
-
-Respond in JSON format:
-{
-  "sentiment": "...",
-  "summary": ["point 1", "point 2", "point 3"],
-  "concerns": ["concern 1", "concern 2"]
-}
-  `;
-  
-  const payload = {
-    contents: [{
-      parts: [{
-        text: prompt
-      }]
-    }]
-  };
-  
-  const options = {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload),
-    headers: {
-      'x-goog-api-key': apiKey
-    },
-    muteHttpExceptions: true
-  };
-  
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const result = JSON.parse(response.getContentText());
-    
-    if (result.candidates && result.candidates[0]) {
-      const text = result.candidates[0].content.parts[0].text;
-      
-      // Extract JSON from response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const analysis = JSON.parse(jsonMatch[0]);
-        
-        // Detect anomalies
-        const anomalies = detectAnomalies(formData);
-        
-        return {
-          sentimentScore: analysis.sentiment || 'Unknown',
-          summary: analysis.summary || [],
-          anomalies: anomalies.concat(analysis.concerns || [])
-        };
-      }
-    }
-    
-    return {
-      sentimentScore: 'Unknown',
-      summary: [],
-      anomalies: detectAnomalies(formData)
-    };
-  } catch (error) {
-    Logger.log('Gemini API Error: ' + error.toString());
-    return {
-      sentimentScore: 'Error',
-      summary: [],
-      anomalies: detectAnomalies(formData)
-    };
-  }
-}
-
-/**
- * Detect anomalies in form submission
- * @param {Object} formData - Form data
- * @returns {Array} List of detected anomalies
- */
-function detectAnomalies(formData) {
-  const anomalies = [];
-  
-  // Check completion time (if tracked)
-  if (formData.completionTime && formData.completionTime < 90) {
-    anomalies.push('Completed in under 90 seconds');
-  }
-  
-  // Check for contradictory answers
-  // Example: High rating but would not rehire
-  if (formData.overallRating >= 4 && formData.wouldRehire === false) {
-    anomalies.push('High rating but would not rehire');
-  }
-  
-  // Check for all maximum ratings (potential bias)
-  const ratings = Object.keys(formData)
-    .filter(key => key.includes('rating'))
-    .map(key => formData[key]);
-  
-  if (ratings.length > 0 && ratings.every(r => r === 5)) {
-    anomalies.push('All ratings at maximum (potential bias)');
-  }
-  
-  return anomalies;
-}
-
 /**
  * Update request with analysis results
  * @param {string} requestId - Request ID
