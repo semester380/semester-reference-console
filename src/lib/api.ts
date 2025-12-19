@@ -4,6 +4,7 @@
  */
 
 import type { Template } from '../types';
+import { CONFIG } from './config';
 
 // Mock Data
 const MOCK_TEMPLATES: Template[] = [
@@ -195,11 +196,11 @@ const mockGAS = {
  */
 
 // Production v96 - SECURE + TEMPLATE SEEDED + RBAC
-const gasBaseUrl = import.meta.env.VITE_GAS_BASE_URL;
+const gasBaseUrl = CONFIG.GAS_BASE_URL;
 
 export const runGAS = (functionName: string, ...args: unknown[]) => {
     return new Promise((resolve, reject) => {
-        const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
+        const useMocks = CONFIG.USE_MOCKS;
 
         if (useMocks) {
             console.log(`[GAS Mock] Calling ${functionName} with:`, args);
@@ -219,8 +220,8 @@ export const runGAS = (functionName: string, ...args: unknown[]) => {
         const jsonPayload = JSON.stringify({
             action: functionName,
             ...argsMap,
-            // Add admin key from env
-            adminKey: import.meta.env.VITE_ADMIN_API_KEY
+            // Add admin key from config
+            adminKey: CONFIG.ADMIN_API_KEY
         });
 
         // JSONP Implementation

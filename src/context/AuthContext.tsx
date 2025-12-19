@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { googleLogout, useGoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
+import { CONFIG } from '../lib/config';
 
 interface User {
     email: string;
@@ -99,11 +100,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     // Make JSONP request
                     const payload = {
                         action: 'verifyStaff',
-                        adminKey: import.meta.env.VITE_ADMIN_API_KEY,
+                        adminKey: CONFIG.ADMIN_API_KEY,
                         userEmail: email
                     };
                     const script = document.createElement('script');
-                    const gasBaseUrl = import.meta.env.VITE_GAS_BASE_URL;
+                    const gasBaseUrl = CONFIG.GAS_BASE_URL;
 
                     script.src = `${gasBaseUrl}?callback=${callbackId}&jsonPayload=${encodeURIComponent(JSON.stringify(payload))}`;
                     console.log('[Auth] Loading verifyStaff script with callback:', callbackId);
