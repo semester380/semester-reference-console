@@ -53,7 +53,7 @@ export default function LoginPage() {
                             <div className="relative flex justify-center text-sm">
                                 <span className="px-2 bg-white text-gray-500">
                                     <Lock className="h-4 w-4 inline mr-1" />
-                                    Authorized Personnel Only
+                                    Authorised Personnel Only
                                 </span>
                             </div>
                         </div>

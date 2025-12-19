@@ -249,7 +249,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({ isOpen, onClos
                                     className="mt-1 mr-3 h-4 w-4 text-semester-blue rounded border-nano-gray-300 focus:ring-semester-blue"
                                 />
                                 <span className="text-sm text-nano-gray-600">
-                                    I confirm that this request complies with the organization's data protection policies.
+                                    I confirm that this request complies with the organisation's data protection policies.
                                     The candidate will be automatically contacted for consent before the referee is approached.
                                 </span>
                             </label>

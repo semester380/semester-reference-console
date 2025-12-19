@@ -54,8 +54,8 @@ const DEFAULT_TEMPLATE = {
       id: "employment",
       title: "Employment Details",
       fields: [
-        { id: "dateStarted", label: "Date Started", type: "date", required: true },
-        { id: "dateEnded", label: "Date Ended", type: "date", required: true },
+        { id: "dateStarted", label: "Date Started", type: "date", required: true, layout: "half" },
+        { id: "dateEnded", label: "Date Ended", type: "date", required: true, layout: "half" },
         { id: "jobTitle", label: "Job Title", type: "text", required: true },
         { id: "reasonForLeaving", label: "Reason for Leaving", type: "textarea", required: true },
         { id: "safeguardingConcerns", label: "Were there any safeguarding concerns during employment?", type: "boolean", required: true },
@@ -102,10 +102,10 @@ const DEFAULT_TEMPLATE = {
       title: "Declaration",
       description: "Please confirm your details below:",
       fields: [
-        { id: "refereeName", label: "Your Full Name", type: "text", required: true },
-        { id: "refereePosition", label: "Your Position/Title", type: "text", required: true },
-        { id: "refereeCompany", label: "Company/Organisation", type: "text", required: true },
-        { id: "refereeTelephone", label: "Telephone Number", type: "text", required: true },
+        { id: "refereeName", label: "Your Full Name", type: "text", required: true, layout: "half" },
+        { id: "refereePosition", label: "Your Position/Title", type: "text", required: true, layout: "half" },
+        { id: "refereeCompany", label: "Company/Organisation", type: "text", required: true, layout: "half" },
+        { id: "refereeTelephone", label: "Telephone Number", type: "text", required: true, layout: "half" },
         { id: "refereeEmailConfirm", label: "Email Address", type: "email", required: true },
         { id: "signature", label: "Digital Signature", type: "signature", required: true }
       ]
@@ -324,7 +324,7 @@ function handleApiRequest(e) {
       'archiveRequests', 'unarchiveRequests', 'deleteRequests', 
       'runSmartChase', 'runAnalysis', 'listStaff', 'addStaff', 
       'updateStaff', 'deactivateStaff', 
-      'initializeDatabase', 'resetTemplates', 'fixTemplateStructure', 'seedEmploymentTemplate', 'sealRequest', 'diagnoseConfig', 'fixPermissions',
+      'initializeDatabase', 'resetTemplates', 'fixTemplateStructure', 'seedEmploymentTemplate', 'sealRequest', 'diagnoseConfig', 'fixPermissions', 'backfillTokens',
       'runCompleteE2ETest', 'runQA', 'saveTemplate', 'deleteTemplate'
     ];
     
@@ -422,6 +422,9 @@ function handleApiRequest(e) {
         break;
       case 'fixTemplateStructure':
         result = fixTemplateStructure();
+        break;
+      case 'backfillTokens':
+        result = backfillTokens();
         break;
       case 'saveTemplate':
         result = saveTemplate(payload.templateName, payload.structureJSON, payload.templateId, staff);
@@ -1364,9 +1367,13 @@ function getMyRequests(includeArchived = false) {
   const headers = data[0];
   const userEmail = Session.getActiveUser().getEmail();
   
-  // Find Archived column index dynamically
-  const archivedColIndex = headers.indexOf('Archived');
-  
+  // Dynamic Column Mapping for Durability
+  const colMap = {};
+  headers.forEach((h, i) => colMap[h] = i);
+  // Ensure we have critical columns
+  const getCol = (name) => colMap[name];
+  const getVal = (row, name) => row[colMap[name]];
+
   // Fetch all AI results for efficient lookup
   const aiResults = getAllAIResults();
   
@@ -1374,44 +1381,58 @@ function getMyRequests(includeArchived = false) {
   // Skip header
   for (let i = 1; i < data.length; i++) {
     // Check archived status
-    const isArchived = archivedColIndex !== -1 && data[i][archivedColIndex] === true;
+    const isArchived = getVal(data[i], 'Archived') === true;
     
     // Skip archived unless explicitly requested
     if (isArchived && !includeArchived) {
       continue;
     }
     
-    const requestId = data[i][0];
+    const requestId = getVal(data[i], 'RequestID');
+    const status = getVal(data[i], 'Status');
+    const method = getVal(data[i], 'Method');
     
-    // We need to fetch responses if completed
+    // We need to fetch responses if completed (legacy or new)
     let responses = {};
-    if (data[i][6] === 'Completed' || data[i][6] === 'Declined' || data[i][6] === 'SEALED') {
-      responses = fetchResponses(requestId);
+    if (status === 'Completed' || status === 'Declined' || status === 'SEALED') {
+      // If we store responses elsewhere, fetch them. 
+      // For now, we rely on fetchResponses helper if it exists, or just minimal data.
+      // Assuming fetchResponses is defined in Code.gs
+      if (typeof fetchResponses === 'function') {
+         responses = fetchResponses(requestId);
+      }
       
       // Add decline/upload info from columns
-      if (data[i][16] === 'decline') {
-        responses.declineReason = data[i][17];
-        responses.declineDetails = data[i][18];
-      } else if (data[i][16] === 'upload') {
-        responses.uploadedFileUrl = data[i][21];
-        responses.fileName = data[i][22];
+      if (method === 'decline') {
+        responses.declineReason = getVal(data[i], 'DeclineReason');
+        responses.declineDetails = getVal(data[i], 'DeclineDetails');
+      } else if (method === 'upload') {
+        responses.uploadedFileUrl = getVal(data[i], 'UploadedFileUrl');
+        responses.fileName = getVal(data[i], 'FileName');
       }
     }
     
+    // BACKWARDS COMPATIBILITY: Ensure Tokens are safe strings
+    const consentToken = getVal(data[i], 'ConsentToken') || '';
+    const refereeToken = getVal(data[i], 'RefereeToken') || '';
+
     myRequests.push({
       requestId: requestId,
-      candidateName: data[i][1],
-      candidateEmail: data[i][2],
-      refereeName: data[i][3],
-      refereeEmail: data[i][4],
-      status: data[i][6],
-      consentStatus: data[i][7] === 'GRANTED',
-      token: data[i][9], // Exposed for testing
-      refereeToken: data[i][11], // Exposed for testing
-      createdAt: data[i][14],
+      candidateName: getVal(data[i], 'CandidateName'),
+      candidateEmail: getVal(data[i], 'CandidateEmail'),
+      refereeName: getVal(data[i], 'RefereeName'),
+      refereeEmail: getVal(data[i], 'RefereeEmail'),
+      status: status,
+      consentStatus: getVal(data[i], 'ConsentStatus') === 'GRANTED',
+      token: consentToken, // Legacy field
+      consentToken: consentToken, // Robust alias
+      refereeToken: refereeToken, 
+      createdAt: getVal(data[i], 'CreatedAt'),
       responses: responses,
       aiAnalysis: aiResults[requestId] || null,
-      archived: isArchived
+      archived: isArchived,
+      // Pass other fields needed for UI
+      pdfUrl: getVal(data[i], 'PdfUrl')
     });
   }
   
@@ -1594,6 +1615,8 @@ function analyzeReference(requestId, staff) {
     const analysis = analyzeSentimentAndAnomalies(requestId, request.responses);
     return { success: true, analysis: analysis };
   } else {
+    Logger.log('Error: analyzeSentimentAndAnomalies function not found');
+    return { success: false, error: "AI module not loaded" };
   }
 }
 
@@ -1776,7 +1799,13 @@ function generatePDF(requestId, request) {
     
     // Save PDF
     const file = folder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    // Try to set public permissions (may fail in some enterprise domains)
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (e) {
+      Logger.log('Warning: Could not set public sharing on PDF. Using default permissions. ' + e.toString());
+    }
     
     return {
       success: true,
@@ -2218,3 +2247,52 @@ function debugDumpRequests() {
  * Send critical error alert to admin
  */
 
+/**
+ * Backfill missing tokens for legacy records
+ */
+function backfillTokens() {
+  const ss = getDatabaseSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_REQUESTS);
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  const colMap = {};
+  headers.forEach((h, i) => colMap[h] = i);
+  // Helper to ensure column exists
+  const getCol = (name) => {
+    if (colMap[name] === undefined) {
+      Logger.log('Column not found: ' + name);
+      return -1;
+    }
+    return colMap[name];
+  };
+
+  const updates = [];
+  let count = 0;
+  
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    let changed = false;
+    const status = row[getCol('Status')];
+    
+    // Backfill ConsentToken if missing and status implies we need it or might need it
+    if (!row[getCol('ConsentToken')]) {
+      const newToken = Utilities.getUuid();
+      sheet.getRange(i + 1, getCol('ConsentToken') + 1).setValue(newToken);
+      changed = true;
+      Logger.log('Backfilled ConsentToken for Row ' + (i + 1));
+    }
+    
+    // Backfill RefereeToken if missing and consent given
+    if (!row[getCol('RefereeToken')] && (status === 'CONSENT_GIVEN' || status === 'Completed' || status === 'SEALED' || status === 'Semt')) {
+      const newToken = Utilities.getUuid();
+      sheet.getRange(i + 1, getCol('RefereeToken') + 1).setValue(newToken);
+      changed = true;
+      Logger.log('Backfilled RefereeToken for Row ' + (i + 1));
+    }
+    
+    if (changed) count++;
+  }
+  
+  return { success: true, count: count };
+}

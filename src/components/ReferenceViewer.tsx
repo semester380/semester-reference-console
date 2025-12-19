@@ -458,7 +458,7 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <p className="text-sm font-semibold text-nano-gray-900">Candidate consent granted</p>
-                                        <p className="text-xs text-nano-gray-500 mt-1">Candidate authorized referee to provide reference</p>
+                                        <p className="text-xs text-nano-gray-500 mt-1">Candidate authorised referee to provide reference</p>
                                     </div>
                                     <span className="text-xs font-medium text-nano-gray-400 bg-nano-gray-50 px-2 py-1 rounded">
                                         {formatDate(requestData?.consentTimestamp)}

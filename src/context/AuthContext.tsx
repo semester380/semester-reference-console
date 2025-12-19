@@ -77,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                         if (!response || !response.success) {
                             console.error('[Auth] Verification failed:', response?.error);
-                            alert(`Not Authorized: ${response?.error || 'You are not listed in the Staff database.'}`);
+                            alert(`Not Authorised: ${response?.error || 'You are not listed in the Staff database.'}`);
                             googleLogout();
                             setIsLoading(false);
                             return;

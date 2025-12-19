@@ -16,8 +16,13 @@ function getGasBaseUrl() {
     const envUrl = import.meta.env.VITE_GAS_BASE_URL;
 
     // If env var is missing or contains a known broken ID, use the working fallback
+    // If env var is missing or contains a known broken ID, use the working fallback
     if (!envUrl || BROKEN_GAS_IDS.some(id => envUrl.includes(id))) {
-        console.warn('[Config] Using fallback GAS deployment ID due to missing or broken env var');
+        // Fallback is expected in some environments where env vars aren't set
+        // We only warn if we are strictly in dev mode to help debugging
+        if (import.meta.env.DEV) {
+            console.info('[Config] Using fallback GAS deployment ID (Production ID)');
+        }
         return `https://script.google.com/macros/s/${WORKING_GAS_ID}/exec`;
     }
 
