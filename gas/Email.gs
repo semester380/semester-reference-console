@@ -87,15 +87,35 @@ function sendBrandedEmail(recipient, subject, bodyContent, options) {
   // Provide a reasonable plain text fallback if one wasn't provided
   var safeTextBody = options.textBody || bodyContent.replace(/<[^>]+>/g, '\n').replace(/\n\s*\n/g, '\n\n').trim();
 
-  MailApp.sendEmail({
+  // Construct email options dynamically
+  var emailPayload = {
     to: recipient,
     subject: subject,
     htmlBody: htmlTemplate,
-    body: safeTextBody, // Crucial for spam reduction
-    replyTo: options.replyTo,
-    attachments: options.attachments,
-    name: 'Semester Recruitment' // Consistent Sender Name
-  });
+    body: safeTextBody,
+    name: 'Semester Recruitment'
+  };
+
+  if (options.replyTo) emailPayload.replyTo = options.replyTo;
+  if (options.attachments) emailPayload.attachments = options.attachments;
+
+  logDebug('sendBrandedEmail', 'Attempting Send', { recipient, optionsKeys: Object.keys(options) });
+
+  try {
+    MailApp.sendEmail(emailPayload);
+    logDebug('sendBrandedEmail', 'Success', { recipient });
+  } catch (e) {
+    logDebug('sendBrandedEmail', 'Primary Failed', { error: e.toString() });
+    
+    // Fallback
+    try {
+      MailApp.sendEmail(recipient, subject, safeTextBody);
+      logDebug('sendBrandedEmail', 'Fallback Success', { recipient });
+    } catch (e2) {
+      logDebug('sendBrandedEmail', 'Fallback Failed', { error: e2.toString() });
+      throw e;
+    }
+  }
 }
 
 /**

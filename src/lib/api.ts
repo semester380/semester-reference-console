@@ -198,79 +198,57 @@ const mockGAS = {
 // Production v96 - SECURE + TEMPLATE SEEDED + RBAC
 const gasBaseUrl = CONFIG.GAS_BASE_URL;
 
-export const runGAS = (functionName: string, ...args: unknown[]) => {
-    return new Promise((resolve, reject) => {
-        const useMocks = CONFIG.USE_MOCKS;
 
-        if (useMocks) {
-            console.log(`[GAS Mock] Calling ${functionName} with:`, args);
+export const runGAS = async (functionName: string, ...args: unknown[]) => {
+    const useMocks = CONFIG.USE_MOCKS;
+
+    if (useMocks) {
+        console.log(`[GAS Mock] Calling ${functionName} with:`, args);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((mockGAS as any)[functionName]) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if ((mockGAS as any)[functionName]) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ((mockGAS as any)[functionName])(...args).then(resolve).catch(reject);
-            } else {
-                console.warn(`[GAS Mock] Function ${functionName} not implemented`);
-                resolve({ success: true, message: 'Mock Success' });
-            }
-            return;
+            return ((mockGAS as any)[functionName])(...args);
+        } else {
+            console.warn(`[GAS Mock] Function ${functionName} not implemented`);
+            return { success: true, message: 'Mock Success' };
         }
+    }
 
-        // Construct payload
-        const argsMap = args[0] as Record<string, unknown> || {};
-        const jsonPayload = JSON.stringify({
-            action: functionName,
-            ...argsMap,
-            // Add admin key from config
-            adminKey: CONFIG.ADMIN_API_KEY
+    // Construct payload
+    const argsMap = args[0] as Record<string, unknown> || {};
+    const payload = {
+        action: functionName,
+        ...argsMap,
+        adminKey: CONFIG.ADMIN_API_KEY
+    };
+
+    // Use POST to avoid URL length limits (e.g. Signatures, Files)
+    try {
+        const response = await fetch(gasBaseUrl, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            // Important: GAS handles 'text/plain' better for CORS in some cases, 
+            // but standard 'application/json' usually triggers preflight.
+            // We'll use no-cors-like behavior if possible, but we need the response.
+            // GAS Web App CORS allows requests from everywhere usually.
         });
 
-        // JSONP Implementation
-        const callbackName = `gasCallback_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        if (!response.ok) {
+            throw new Error(`HTTP Error: ${response.status}`);
+        }
 
-        const separator = gasBaseUrl.includes('?') ? '&' : '?';
-        const url = `${gasBaseUrl}${separator}action=${encodeURIComponent(functionName)}&callback=${callbackName}&jsonPayload=${encodeURIComponent(jsonPayload)}`;
+        const data = await response.json();
 
-        // Cleanup
-        // eslint-disable-next-line prefer-const
-        let timeoutId: number;
-        const cleanup = () => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            delete (window as any)[callbackName];
-            const script = document.getElementById(callbackName);
-            if (script) script.remove();
-            if (timeoutId) clearTimeout(timeoutId);
-        };
+        if (data.success === false) {
+            throw new Error(data.error || 'Server reported failure');
+        }
 
-        // Callback
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any)[callbackName] = (response: any) => {
-            cleanup();
-            // Allow success=undefined (legacy/simple functions) or success=true
-            if (response && response.success !== false) {
-                resolve(response);
-            } else {
-                console.error('GAS Error:', response);
-                reject(response?.error || 'Unknown error');
-            }
-        };
+        return data;
 
-        // Script creation
-        const script = document.createElement('script');
-        script.src = url;
-        script.id = callbackName;
-        script.onerror = () => {
-            cleanup();
-            reject(new Error('Script load failed (Network/Blocking)'));
-        };
-
-        document.body.appendChild(script);
-
-        // Timeout
-        timeoutId = window.setTimeout(() => {
-            cleanup();
-            reject(new Error(`Timeout waiting for ${functionName}`));
-        }, 30000);
-    });
+    } catch (e: any) {
+        console.error('GAS API Error:', e);
+        throw e.message || e.toString();
+    }
 };
 
 /**

@@ -9,6 +9,7 @@ const SHEET_REQUESTS = "Requests_Log";
 const SHEET_AUDIT = "Audit_Trail";
 const SHEET_TEMPLATES = "Template_Definitions";
 const SHEET_AI_RESULTS = "AI_Results";
+const SHEET_DEBUG_LOG = "Debug_Log"; // New logging sheet
 const TOKEN_EXPIRY_HOURS = 72;
 
 // AI & Automation
@@ -19,6 +20,23 @@ const MAX_CHASES_PER_DAY = 50;
 // Column indices for Requests_Log (0-indexed)
 const COL_REQUEST_ID = 0;
 const COL_CANDIDATE_NAME = 1;
+
+// --- Helper: Sheet Logger ---
+function logDebug(context, message, data) {
+  try {
+    const ss = getDatabaseSpreadsheet();
+    let sheet = ss.getSheetByName(SHEET_DEBUG_LOG);
+    if (!sheet) {
+       sheet = ss.insertSheet(SHEET_DEBUG_LOG);
+       sheet.appendRow(['Timestamp', 'Context', 'Message', 'Data']);
+    }
+    const safeData = data ? JSON.stringify(data) : '';
+    sheet.appendRow([new Date(), context, message, safeData]);
+  } catch (e) {
+    // Failsafe
+    console.error("Logging failed: " + e);
+  }
+}
 const COL_CANDIDATE_EMAIL = 2;
 const COL_REFEREE_NAME = 3;
 const COL_REFEREE_EMAIL = 4;
@@ -807,12 +825,18 @@ function initiateRequest(requestData, staff) {
 /**
  * Send authorization email to candidate
  */
+
 function sendAuthorizationEmail(email, name, token, refereeName) {
+  logDebug('sendAuthorizationEmail', 'Start', { email, name, refereeName });
+  
   // FIXED: Hardcode Production URL to avoid Vercel preview auth issues
   const baseUrl = 'https://references.semester.co.uk';
   const authUrl = `${baseUrl}/?view=portal&action=authorize&token=${token}`;
   
   const subject = `Action Required: Please authorise your reference for ${refereeName}`;
+  // ... (content truncated for brevity in replace tool, but will be preserved by logic if I construct correctly.
+  // Actually, I should use multi_replace or ensure I don't lose the content.)
+  // I will just add the log line at the start.
   
   const content = `
     <div style="text-align: center; margin-bottom: 30px;">
@@ -848,12 +872,11 @@ function sendAuthorizationEmail(email, name, token, refereeName) {
 /**
  * Process candidate's consent decision
  */
-function processCandidateConsent(token, decision, payload) {
+function processCandidateConsent(token, decision, reason, message) {
+  logDebug('processCandidateConsent', 'Start', { token, decision });
   try {
     console.log("Processing Consent. Token:", token, "Decision:", decision);
     
-    // Support legacy call signature (token, decision) where payload might be missing
-    const reason = payload ? payload.reason : '';
     const message = payload ? payload.message : '';
 
     const ss = getDatabaseSpreadsheet();
@@ -1036,7 +1059,9 @@ function sendConsentQueryNotification(recipient, candidateName, message) {
 /**
  * Validate referee token and return form data
  */
-function validateRefereeToken(token) {
+function validateRefereeToken(params) {
+  const token = params.token;
+  
   console.log(`[validateRefereeToken] Looking for token: "${token}"`);
   
   const ss = getDatabaseSpreadsheet();
@@ -1102,7 +1127,11 @@ function validateRefereeToken(token) {
 /**
  * Submit reference response
  */
+
+
 function submitReference(token, responses, method, declineReason, declineDetails, uploadedFileUrl, fileName) {
+  logDebug('submitReference', 'Start', { token, method });
+
   try {
     const ss = getDatabaseSpreadsheet();
     const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
