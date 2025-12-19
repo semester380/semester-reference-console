@@ -9,16 +9,21 @@ import { Header } from '../components/Header';
 import type { Template } from '../types';
 
 const RefereePortal: React.FC = () => {
-    const [view, setView] = useState<'choice' | 'form' | 'upload' | 'decline' | 'consent'>('choice');
+    const [view, setView] = useState<'choice' | 'form' | 'upload' | 'decline' | 'consent' | 'consent_decline' | 'consent_query'>('choice');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [candidateName, setCandidateName] = useState<string>('');
     const [template, setTemplate] = useState<Template | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [successMessage, setSuccessMessage] = useState<string>('');
     const [uploadFile, setUploadFile] = useState<File | null>(null);
     const [declineReason, setDeclineReason] = useState('');
     const [declineDetails, setDeclineDetails] = useState('');
+
+    // Consent Flow State
+    const [consentDeclineReason, setConsentDeclineReason] = useState('');
+    const [consentQueryMessage, setConsentQueryMessage] = useState('');
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -33,12 +38,6 @@ const RefereePortal: React.FC = () => {
 
         if (action === 'authorize') {
             setView('consent');
-            // For consent, we don't validate against validateRefereeToken
-            // We could validate against a validateConsentToken if it existed, 
-            // but for now we'll trust the token and let the action validate it.
-            // Or we can fetch candidate name if possible.
-            // Since we don't have a specific validateConsentToken API that returns info without action,
-            // we will just show the consent screen.
             setIsLoading(false);
         } else {
             validateToken(token);
@@ -70,6 +69,7 @@ const RefereePortal: React.FC = () => {
         try {
             const result = await runGAS('submitReference', { token, responses }) as { success: boolean; error?: string };
             if (result.success) {
+                setSuccessMessage(`Thank you for providing a reference for ${candidateName}. Your input has been securely recorded.`);
                 setIsSuccess(true);
             } else {
                 alert('Submission failed: ' + result.error);
@@ -115,6 +115,7 @@ const RefereePortal: React.FC = () => {
                     }) as { success: boolean; error?: string };
 
                     if (result.success) {
+                        setSuccessMessage(`Thank you for uploading the reference for ${candidateName}. It has been securely received.`);
                         setIsSuccess(true);
                     } else {
                         alert('Upload failed: ' + (result.error || 'Unknown error'));
@@ -156,6 +157,7 @@ const RefereePortal: React.FC = () => {
                 declineDetails
             }) as { success: boolean; error?: string };
             if (result.success) {
+                setSuccessMessage('Thank you for letting us know. We have updated our records.');
                 setIsSuccess(true);
             } else {
                 alert('Submission failed: ' + result.error);
@@ -167,17 +169,22 @@ const RefereePortal: React.FC = () => {
         }
     };
 
-    const handleConsent = async (decision: 'CONSENT_GIVEN' | 'CONSENT_DECLINED') => {
+    const handleConsent = async (decision: 'CONSENT_GIVEN' | 'CONSENT_DECLINED' | 'CONSENT_QUERY', payload?: any) => {
         setIsSubmitting(true);
         const params = new URLSearchParams(window.location.search);
         const token = params.get('token');
 
         try {
-            const result = await runGAS('authorizeConsent', { token, decision }) as { success: boolean; error?: string };
+            const result = await runGAS('authorizeConsent', { token, decision, ...payload }) as { success: boolean; error?: string };
             if (result.success) {
+                if (decision === 'CONSENT_GIVEN') {
+                    setSuccessMessage('Thank you. Your consent has been recorded and an invitation has been sent to your referee.');
+                } else if (decision === 'CONSENT_DECLINED') {
+                    setSuccessMessage('Thank you. We have recorded that you declined this request. The recruitment team has been notified.');
+                } else {
+                    setSuccessMessage('Thank you. Your query has been sent to the recruitment team. They will be in touch shortly.');
+                }
                 setIsSuccess(true);
-                // If declined, we might want to show a different message, but isSuccess=true handles generic success.
-                // We can set a specific message state if needed.
             } else {
                 setError(result.error || 'Failed to process consent.');
             }
@@ -201,7 +208,7 @@ const RefereePortal: React.FC = () => {
             <div className="min-h-screen bg-nano-gray-50 flex items-center justify-center p-6">
                 <Card className="max-w-md w-full text-center py-12 shadow-lg rounded-2xl">
                     <div className="text-4xl mb-4">⚠️</div>
-                    <h2 className="text-xl font-semibold text-nano-gray-900 mb-2">Access Denied</h2>
+                    <h2 className="text-xl font-semibold text-nano-gray-900 mb-2">Notice</h2>
                     <p className="text-nano-gray-600">{error}</p>
                 </Card>
             </div>
@@ -215,10 +222,9 @@ const RefereePortal: React.FC = () => {
                 <main className="max-w-3xl mx-auto px-4 py-12">
                     <Card className="w-full text-center py-12 shadow-lg rounded-2xl border-t-4 border-semester-blue">
                         <div className="text-5xl mb-6">✅</div>
-                        <h2 className="text-2xl font-bold text-nano-gray-900 mb-3">Reference Submitted</h2>
-                        <p className="text-nano-gray-600 leading-relaxed px-6">
-                            Thank you for providing a reference for <strong className="text-nano-gray-900">{candidateName}</strong>.
-                            Your input has been securely recorded.
+                        <h2 className="text-2xl font-bold text-nano-gray-900 mb-3">Submission Received</h2>
+                        <p className="text-nano-gray-600 leading-relaxed px-6 max-w-lg mx-auto">
+                            {successMessage || 'Your response has been securely recorded.'}
                         </p>
                     </Card>
                 </main>
@@ -236,12 +242,14 @@ const RefereePortal: React.FC = () => {
                     <Logo variant="mark" className="mb-6 scale-125" />
                     <h1 className="text-3xl font-bold text-nano-gray-900 tracking-tight">Semester Reference</h1>
                     <p className="mt-3 text-lg text-nano-gray-600">
-                        Reference for <span className="font-semibold text-semester-blue">{candidateName}</span>
+                        Secure Reference Portal
                     </p>
                 </div>
 
                 {/* Content Area */}
                 <div className="transition-all duration-300 ease-in-out">
+
+                    {/* --- REFEREE PORTAL VIEWS --- */}
                     {view === 'choice' && (
                         <div className="grid gap-6 md:grid-cols-3">
                             <button
@@ -297,14 +305,11 @@ const RefereePortal: React.FC = () => {
                                 ✕ Cancel
                             </button>
                             {template && (
-                                <>
-                                    {console.log('TEMPLATE_STRUCTURE:', JSON.stringify(template.structureJSON))}
-                                    <DynamicForm
-                                        structure={template.structureJSON}
-                                        onSubmit={handleSubmit}
-                                        isSubmitting={isSubmitting}
-                                    />
-                                </>
+                                <DynamicForm
+                                    structure={template.structureJSON}
+                                    onSubmit={handleSubmit}
+                                    isSubmitting={isSubmitting}
+                                />
                             )}
                         </Card>
                     )}
@@ -388,30 +393,109 @@ const RefereePortal: React.FC = () => {
                         </Card>
                     )}
 
+                    {/* --- CONSENT VIEWS --- */}
                     {view === 'consent' && (
                         <Card className="p-8 sm:p-10 shadow-xl rounded-2xl border border-nano-gray-100 relative max-w-xl mx-auto text-center">
-                            <h2 className="text-2xl font-bold text-nano-gray-900 mb-4">Authorize Reference Request</h2>
+                            <h2 className="text-2xl font-bold text-nano-gray-900 mb-4">Authorise Reference Request</h2>
                             <p className="text-nano-gray-600 mb-8 leading-relaxed">
                                 A reference request has been initiated. Do you consent to us contacting the referee on your behalf?
                             </p>
-                            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                            <div className="flex flex-col gap-4">
                                 <button
                                     onClick={() => handleConsent('CONSENT_GIVEN')}
                                     disabled={isSubmitting}
-                                    className="btn-primary py-3 px-8 text-lg disabled:opacity-50"
+                                    className="btn-primary py-4 px-8 text-lg w-full disabled:opacity-50"
                                 >
-                                    {isSubmitting ? 'Processing...' : '✅ I Consent'}
+                                    {isSubmitting ? 'Processing...' : '✅ I Give Consent'}
                                 </button>
-                                <button
-                                    onClick={() => handleConsent('CONSENT_DECLINED')}
-                                    disabled={isSubmitting}
-                                    className="px-8 py-3 rounded-lg border-2 border-nano-gray-200 text-nano-gray-600 font-semibold hover:bg-nano-gray-50 transition-colors disabled:opacity-50"
-                                >
-                                    🚫 Decline
-                                </button>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        onClick={() => setView('consent_decline')}
+                                        disabled={isSubmitting}
+                                        className="py-3 px-4 rounded-lg border-2 border-nano-gray-200 text-nano-gray-600 font-semibold hover:bg-nano-gray-50 transition-colors disabled:opacity-50 text-sm"
+                                    >
+                                        🚫 No, Decline
+                                    </button>
+                                    <button
+                                        onClick={() => setView('consent_query')}
+                                        disabled={isSubmitting}
+                                        className="py-3 px-4 rounded-lg border-2 border-nano-gray-200 text-nano-gray-600 font-semibold hover:bg-nano-gray-50 transition-colors disabled:opacity-50 text-sm"
+                                    >
+                                        ℹ️ Request Changes
+                                    </button>
+                                </div>
                             </div>
+                            <p className="text-xs text-nano-gray-400 mt-6">
+                                By clicking Confirm, you agree to our <a href="#" className="underline">Privacy Policy</a> regarding data processing.
+                            </p>
                         </Card>
                     )}
+
+                    {view === 'consent_decline' && (
+                        <Card className="p-8 sm:p-10 shadow-xl rounded-2xl border border-nano-gray-100 relative max-w-xl mx-auto">
+                            <button
+                                onClick={() => setView('consent')}
+                                className="absolute top-6 right-6 text-nano-gray-400 hover:text-nano-gray-600 transition-colors"
+                            >
+                                ✕ Back
+                            </button>
+                            <h2 className="text-xl font-bold text-nano-gray-900 mb-4">Decline Consent</h2>
+                            <p className="text-nano-gray-600 mb-6 text-sm">
+                                Please let us know why you are declining this request. This will stop the reference process.
+                            </p>
+                            <div className="mb-6">
+                                <label className="block text-sm font-semibold text-nano-gray-700 mb-2">Reason</label>
+                                <textarea
+                                    className="input min-h-[100px]"
+                                    value={consentDeclineReason}
+                                    onChange={(e) => setConsentDeclineReason(e.target.value)}
+                                    placeholder="e.g. I do not wish for this person to be contacted..."
+                                    required
+                                />
+                            </div>
+                            <button
+                                onClick={() => handleConsent('CONSENT_DECLINED', { reason: consentDeclineReason })}
+                                disabled={!consentDeclineReason || isSubmitting}
+                                className="btn-primary w-full py-3 text-lg bg-status-error hover:bg-red-700 focus:ring-red-500 disabled:opacity-50"
+                            >
+                                {isSubmitting ? 'Submitting...' : 'Confirm Decline'}
+                            </button>
+                        </Card>
+                    )}
+
+                    {view === 'consent_query' && (
+                        <Card className="p-8 sm:p-10 shadow-xl rounded-2xl border border-nano-gray-100 relative max-w-xl mx-auto">
+                            <button
+                                onClick={() => setView('consent')}
+                                className="absolute top-6 right-6 text-nano-gray-400 hover:text-nano-gray-600 transition-colors"
+                            >
+                                ✕ Back
+                            </button>
+                            <h2 className="text-xl font-bold text-nano-gray-900 mb-4">Request Changes</h2>
+                            <p className="text-nano-gray-600 mb-6 text-sm">
+                                If the referee details are incorrect or you need to change something, please let us know below. The recruitment team will be notified.
+                            </p>
+                            <div className="mb-6">
+                                <label className="block text-sm font-semibold text-nano-gray-700 mb-2">Message</label>
+                                <textarea
+                                    className="input min-h-[100px]"
+                                    value={consentQueryMessage}
+                                    onChange={(e) => setConsentQueryMessage(e.target.value)}
+                                    placeholder="e.g. This is the wrong email, please use..."
+                                    required
+                                />
+                            </div>
+                            <button
+                                onClick={() => handleConsent('CONSENT_QUERY', { message: consentQueryMessage })}
+                                disabled={!consentQueryMessage || isSubmitting}
+                                className="btn-primary w-full py-3 text-lg disabled:opacity-50"
+                            >
+                                {isSubmitting ? 'Sending...' : 'Send Query'}
+                            </button>
+                        </Card>
+                    )}
+
                 </div>
 
                 {/* Footer */}

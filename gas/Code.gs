@@ -803,30 +803,36 @@ function initiateRequest(requestData, staff) {
 /**
  * Send authorization email to candidate
  */
+
+/**
+ * Send authorization email to candidate
+ */
 function sendAuthorizationEmail(email, name, token, refereeName) {
-  const portalBaseUrl = PropertiesService.getScriptProperties().getProperty('PORTAL_BASE_URL') || 'https://semester-reference-console-nmd4bhpey-robs-projects-ae895b9a.vercel.app/';
-  const baseUrl = portalBaseUrl.endsWith('/') ? portalBaseUrl.slice(0, -1) : portalBaseUrl;
+  // FIXED: Hardcode Production URL to avoid Vercel preview auth issues
+  const baseUrl = 'https://references.semester.co.uk';
   const authUrl = `${baseUrl}/?view=portal&action=authorize&token=${token}`;
   
-  const subject = `Please approve your reference for ${refereeName}`;
+  const subject = `Action Required: Please authorise your reference for ${refereeName}`;
   
   const content = `
     <div style="text-align: center; margin-bottom: 30px;">
-       <h2 style="color: #111827; font-weight: 600; margin: 0;">Authorization Required</h2>
+       <h2 style="color: #111827; font-weight: 600; margin: 0;">Authorisation Required</h2>
     </div>
-    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">Dear ${name},</p>
-    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
+    <p>Dear ${name},</p>
+    <p>
       We are ready to request a reference from <strong>${refereeName}</strong> to support your application.
     </p>
-    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
+    <p>
       To comply with GDPR and keep you in control of your data, please confirm that you are happy for us to contact them.
     </p>
     <div style="margin: 32px 0; text-align: center;">
-      <a href="${authUrl}" style="background-color: #0052CC; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">Approve Reference Request</a>
+      <a href="${authUrl}" class="button" style="background-color: #0052CC; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">Review & Authorise Request</a>
     </div>
     <p style="color: #6b7280; font-size: 14px; margin-top: 32px; line-height: 1.5;">
-      This will immediately send an invitation to your referee.<br/>
-      If you did not expect this request, you can ignore this email or decline via the link.
+      You will have the option to:
+      <br/>• <strong>Approve</strong> the request (sends immediate invite)
+      <br/>• <strong>Decline</strong> the request
+      <br/>• <strong>Query</strong> details (if the referee is incorrect)
     </p>
   `;
   
@@ -838,10 +844,18 @@ function sendAuthorizationEmail(email, name, token, refereeName) {
 /**
  * Process candidate's consent decision
  */
-function processCandidateConsent(token, decision) {
+
+/**
+ * Process candidate's consent decision
+ */
+function processCandidateConsent(token, decision, payload) {
   try {
     console.log("Processing Consent. Token:", token, "Decision:", decision);
     
+    // Support legacy call signature (token, decision) where payload might be missing
+    const reason = payload ? payload.reason : '';
+    const message = payload ? payload.message : '';
+
     const ss = getDatabaseSpreadsheet();
     const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
     const data = requestsSheet.getDataRange().getValues();
@@ -860,6 +874,9 @@ function processCandidateConsent(token, decision) {
     const colRefereeEmail = headers.indexOf("RefereeEmail");
     const colCandidateEmail = headers.indexOf("CandidateEmail");
     const colConsentTokenExpiry = headers.indexOf("ConsentTokenExpiry");
+    const colDeclineReason = headers.indexOf("DeclineReason");
+    const colDeclineDetails = headers.indexOf("DeclineDetails");
+    const colRequesterEmail = headers.indexOf("RequesterEmail");
     
     if (colConsentToken === -1 || colStatus === -1) {
       console.error("Critical: Missing columns in Requests_Log");
@@ -895,24 +912,10 @@ function processCandidateConsent(token, decision) {
       }
     }
     
-    // Check if already processed
-    // Allow retry if status is PENDING or if it's just a re-click (idempotency could be better, but for now strict check)
-    // Actually, if it's already GRANTED, just return success to be idempotent
-    const currentStatus = request[colConsentStatus];
-    if (currentStatus === 'GRANTED' && decision === 'CONSENT_GIVEN') {
-       console.log("Consent already granted, returning success idempotently");
-       return { success: true };
-    }
-    
-    if (currentStatus !== 'PENDING' && currentStatus !== '') {
-       console.warn("Request already processed. Status:", currentStatus);
-       return { success: false, error: "Request already processed" };
-    }
-    
     const requestId = request[colRequestId];
     const now = new Date();
     
-    // Update Record
+    // Update Record based on Decision
     if (decision === 'CONSENT_GIVEN') {
       requestsSheet.getRange(rowIndex + 1, colStatus + 1).setValue('CONSENT_GIVEN');
       requestsSheet.getRange(rowIndex + 1, colConsentStatus + 1).setValue('GRANTED');
@@ -927,14 +930,40 @@ function processCandidateConsent(token, decision) {
       
       // Send Invite to Referee
       sendRefereeInviteEmail(request[colRefereeEmail], request[colRefereeName], request[colCandidateName], refereeToken);
-      
-    } else {
+      logAudit(requestId, 'Candidate', '', 'Candidate', 'CONSENT_GIVEN', { token: '***' });
+
+    } else if (decision === 'CONSENT_DECLINED') {
       requestsSheet.getRange(rowIndex + 1, colStatus + 1).setValue('CONSENT_DECLINED');
       requestsSheet.getRange(rowIndex + 1, colConsentStatus + 1).setValue('DECLINED');
       requestsSheet.getRange(rowIndex + 1, colConsentTimestamp + 1).setValue(now);
+      
+      // Store Reason 
+      if (colDeclineReason !== -1 && reason) {
+         requestsSheet.getRange(rowIndex + 1, colDeclineReason + 1).setValue(reason);
+      }
+      
+      // Notify Requester
+      if (request[colRequesterEmail]) {
+        sendConsentDeclinedNotification(request[colRequesterEmail], request[colCandidateName], reason);
+      }
+      logAudit(requestId, 'Candidate', '', 'Candidate', 'CONSENT_DECLINED', { reason: reason });
+
+    } else if (decision === 'CONSENT_QUERY') {
+      requestsSheet.getRange(rowIndex + 1, colStatus + 1).setValue('CONSENT_QUERY');
+      requestsSheet.getRange(rowIndex + 1, colConsentStatus + 1).setValue('QUERY');
+      requestsSheet.getRange(rowIndex + 1, colConsentTimestamp + 1).setValue(now);
+      
+      // Store Message in DeclineDetails for now (or a new column if we had one, but DeclineDetails works for generic notes)
+      if (colDeclineDetails !== -1 && message) {
+         requestsSheet.getRange(rowIndex + 1, colDeclineDetails + 1).setValue("Query: " + message);
+      }
+
+      // Notify Requester
+      if (request[colRequesterEmail]) {
+        sendConsentQueryNotification(request[colRequesterEmail], request[colCandidateName], message);
+      }
+      logAudit(requestId, 'Candidate', '', 'Candidate', 'CONSENT_QUERY', { message: message });
     }
-    
-    logAudit(requestId, 'Candidate', '', 'Candidate', decision, { token: '***' });
     
     return { success: true };
     
@@ -944,35 +973,62 @@ function processCandidateConsent(token, decision) {
   }
 }
 
+
+
 function sendRefereeInviteEmail(email, name, candidateName, token) {
-  const portalBaseUrl = PropertiesService.getScriptProperties().getProperty('PORTAL_BASE_URL') || 'https://semester-reference-console-nmd4bhpey-robs-projects-ae895b9a.vercel.app/';
-  const baseUrl = portalBaseUrl.endsWith('/') ? portalBaseUrl.slice(0, -1) : portalBaseUrl;
+  // FIXED: Hardcode Production URL
+  const baseUrl = 'https://references.semester.co.uk';
   const inviteUrl = `${baseUrl}/?view=portal&token=${token}`;
   
-  const subject = `Reference request for ${candidateName} (takes ~2 minutes)`;
-  
+  const subject = `Reference Request for ${candidateName} (2 minutes)`;
+   
   const content = `
     <div style="text-align: center; margin-bottom: 30px;">
        <h2 style="color: #111827; font-weight: 600; margin: 0;">Reference Request</h2>
     </div>
-    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">Dear ${name},</p>
-    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
-      <strong>${candidateName}</strong> has nominated you as a referee and we would really value your feedback.
+    <p>Dear ${name},</p>
+    <p>
+      <strong>${candidateName}</strong> has nominated you as a referee and we would be grateful for your feedback.
     </p>
-    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">
-      We know you’re busy, so we’ve made this as quick as possible:
+    <p>
+      We know you’re busy, so we’ve made this process efficiently fast:
     </p>
     <ul style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
-      <li><strong>Online form:</strong> mobile-friendly, usually takes about 2 minutes.</li>
-      <li><strong>Upload:</strong> or simply upload an existing reference letter.</li>
-      <li><strong>Decline:</strong> if you cannot provide a reference, please let us know via the link.</li>
+      <li><strong>Online form:</strong> Mobile-friendly, takes ~2 minutes.</li>
+      <li><strong>Upload:</strong> Or simply upload an existing reference letter.</li>
+      <li><strong>Decline:</strong> If you cannot provide a reference, please let us know via the link.</li>
     </ul>
     <div style="margin: 32px 0; text-align: center;">
-      <a href="${inviteUrl}" style="background-color: #0052CC; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">Provide Reference</a>
+      <a href="${inviteUrl}" class="button" style="background-color: #0052CC; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">Provide Reference</a>
     </div>
   `;
   
   sendBrandedEmail(email, subject, content);
+}
+
+function sendConsentDeclinedNotification(recipient, candidateName, reason) {
+  const subject = `Consent Declined: ${candidateName}`;
+  const content = `
+    <h2>Consent Declined</h2>
+    <p><strong>${candidateName}</strong> has declined the reference request.</p>
+    <p><strong>Reason provided:</strong> ${reason || 'No reason provided.'}</p>
+    <p>Please review the request in the Dashboard.</p>
+  `;
+  sendBrandedEmail(recipient, subject, content); // Use default branding
+}
+
+function sendConsentQueryNotification(recipient, candidateName, message) {
+  const subject = `Consent Query: ${candidateName}`;
+  const content = `
+    <h2>Candidate Query</h2>
+    <p><strong>${candidateName}</strong> has raised a query regarding their reference request.</p>
+    <p><strong>Message:</strong></p>
+    <div style="background-color: #f3f4f6; padding: 15px; border-radius: 4px; border: 1px solid #e5e7eb; font-style: italic;">
+      "${message || 'No message provided.'}"
+    </div>
+    <p>Please contact the candidate to resolve this issue before re-initiating the request.</p>
+  `;
+  sendBrandedEmail(recipient, subject, content);
 }
 
 // --- Core Workflow: Referee Portal ---
