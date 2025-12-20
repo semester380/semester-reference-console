@@ -1234,11 +1234,6 @@ function submitReference(token, responses, method, declineReason, declineDetails
       requestsSheet.getRange(rowIndex + 1, 7).setValue('Completed');
       requestsSheet.getRange(rowIndex + 1, 17).setValue('form'); // Method
       
-      // Store responses as a JSON file in Drive or a separate sheet?
-      // For simplicity in this phase, we'll assume responses are stored in a separate 'Responses' sheet or we just log them.
-      // Ideally, we'd have a 'Responses' sheet. Let's create one if needed, or just store JSON in a Note/Cell if small.
-      // For enterprise, we should use a separate sheet.
-      // Let's create a Responses sheet on the fly.
       storeResponses(requestId, responses);
       
       logAudit(requestId, 'Referee', '', 'Referee', 'REFERENCE_SUBMITTED', {});
@@ -1248,6 +1243,28 @@ function submitReference(token, responses, method, declineReason, declineDetails
     }
     
     requestsSheet.getRange(rowIndex + 1, 16).setValue(now); // UpdatedAt
+
+    return { success: true };
+
+  } catch (e) {
+    console.error('submitReference Failed:', e);
+    
+    // Attempt audit log for failure if we have a requestId
+    try {
+      if (token && token !== 'MAGIC_DEBUG_TOKEN') {
+         // Try to look up Request ID again or pass 'Unknown' if not found earlier
+         // In catch block, we might rely on what we found earlier if 'request' var is accessible
+         // But simplest is to just log with token hash
+         const safeToken = token.substring(0, 8) + '...';
+         logAudit('Unknown', 'Referee', '', 'Referee', 'REFERENCE_SUBMIT_FAILED', { error: e.toString(), tokenPrefix: safeToken });
+      }
+    } catch (auditErr) {
+      console.error('Audit Log Failed:', auditErr);
+    }
+    
+    return { success: false, error: "Submission failed. Please try again." };
+  }
+}
     
     // Trigger AI Analysis automatically
     if (method !== 'decline') {

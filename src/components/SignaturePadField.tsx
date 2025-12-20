@@ -122,8 +122,10 @@ export const SignaturePadField: React.FC<SignaturePadFieldProps> = ({
                     </label>
                     <div className={`bg-white border-2 ${error && !hasDrawn
                         ? 'border-status-error'
-                        : 'border-nano-gray-300'
-                        } rounded-lg overflow-hidden relative`}>
+                        : hasDrawn
+                            ? 'border-status-success shadow-sm'
+                            : 'border-nano-gray-300'
+                        } rounded-lg overflow-hidden relative transition-all duration-300`}>
                         <SignatureCanvas
                             ref={sigCanvas}
                             canvasProps={{
@@ -140,17 +142,26 @@ export const SignaturePadField: React.FC<SignaturePadFieldProps> = ({
                                 </span>
                             </div>
                         )}
+                        {hasDrawn && (
+                            <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/90 px-2 py-1 rounded-full shadow-sm text-xs font-bold text-status-success animate-in fade-in zoom-in">
+                                <span>✓</span> Captured
+                            </div>
+                        )}
                     </div>
                     <div className="flex justify-between items-center mt-2">
                         <button
                             type="button"
                             onClick={handleClear}
-                            className="text-sm text-nano-gray-600 hover:text-semester-blue transition-colors"
+                            disabled={!hasDrawn && !typedName}
+                            className={`text-sm flex items-center gap-1 transition-colors px-2 py-1 rounded-md
+                                ${hasDrawn || typedName
+                                    ? 'text-status-error hover:bg-status-error/10 cursor-pointer'
+                                    : 'text-nano-gray-300 cursor-not-allowed'}`}
                         >
                             🗑️ Clear signature
                         </button>
                         {signedAt && (
-                            <span className="text-xs text-nano-gray-500">
+                            <span className="text-xs text-nano-gray-500 font-mono">
                                 Signed: {formatDate(signedAt)}
                             </span>
                         )}

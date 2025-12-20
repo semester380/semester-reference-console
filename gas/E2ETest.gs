@@ -147,12 +147,39 @@ function runCompleteE2ETest() {
        // Don't fail the whole test for AI as it depends on key
     }
 
+    // --- MANUALLY ADDED: Create a Pending Request for Browser Testing ---
+    console.log('\n--- CREATING PENDING REQUEST FOR BROWSER TEST ---');
+    const pReq = initiateRequest({
+      candidateName: 'Browser Test Pending',
+      candidateEmail: 'browser@pending.com',
+      refereeName: 'Pending Ref',
+      refereeEmail: 'ref@pending.com',
+      templateId: 'standard-social-care'
+    });
+    let pendingToken = null;
+    if (pReq.success) {
+      const pId = pReq.requestId;
+      const pRows = getMyRequests().data;
+      const pRow = pRows.find(r => r.requestId === pId);
+      if (pRow) {
+         processCandidateConsent(pRow.token, 'CONSENT_GIVEN');
+         // Fetch again to get referee token
+         const pRows2 = getMyRequests().data;
+         const pRow2 = pRows2.find(r => r.requestId === pId);
+         if (pRow2) pendingToken = pRow2.refereeToken;
+      }
+    }
+    console.log('Pending Test Token:', pendingToken);
+
     return {
        success: true,
        message: "Full E2E Test Completed incl. Submission, Seal, and AI",
        requestId: requestId,
        pdfUrl: sealResult.pdfUrl,
-       aiSentiment: aiResult.sentimentScore
+       aiSentiment: aiResult.sentimentScore,
+       refereeToken: refereeToken,
+       consentToken: consentToken,
+       pendingToken: pendingToken  // <--- The key we need
     };
 
   } catch (e) {
