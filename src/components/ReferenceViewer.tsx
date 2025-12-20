@@ -77,10 +77,38 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
     const loadAuditTrail = async () => {
         setIsLoadingAudit(true);
         try {
-            const trail = await runGAS('getAuditTrail', { requestId, userEmail: user?.email }) as AuditEvent[];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let response = await runGAS('getAuditTrail', { requestId, userEmail: user?.email }) as any;
+
+            // Handle stringified JSON responses (legacy or double-encoded)
+            if (typeof response === 'string') {
+                try {
+                    response = JSON.parse(response);
+                } catch (e) {
+                    console.warn('Failed to parse audit trail JSON string:', e);
+                    response = [];
+                }
+            }
+
+            // Defensively handle response shape (could be array directly or {data: []})
+            let trail: AuditEvent[] = [];
+
+            if (!response) {
+                trail = [];
+            } else if (Array.isArray(response)) {
+                trail = response;
+            } else if (Array.isArray(response.data)) {
+                trail = response.data;
+            } else {
+                console.warn('Audit trail response format invalid:', response);
+                trail = [];
+            }
+
             setAuditTrail(trail);
         } catch (e) {
             console.error('Failed to load audit trail:', e);
+            setAuditTrail([]); // Safe fallback
         } finally {
             setIsLoadingAudit(false);
         }
@@ -521,7 +549,7 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
                                 <p className="text-nano-gray-500 text-sm">Loading audit trail...</p>
                             ) : (
                                 <div className="space-y-3">
-                                    {auditTrail.map((event) => (
+                                    {(Array.isArray(auditTrail) && auditTrail.length > 0) ? auditTrail.map((event) => (
                                         <div
                                             key={event.auditId}
                                             className="bg-white p-3 rounded-lg border border-nano-gray-200 text-sm shadow-sm flex justify-between items-center"
@@ -534,7 +562,11 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
                                                 {formatDate(event.timestamp)}
                                             </span>
                                         </div>
-                                    ))}
+                                    )) : (
+                                        <div className="text-center text-nano-gray-400 text-sm py-2">
+                                            No audit events recorded.
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
