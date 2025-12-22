@@ -164,3 +164,153 @@ function sendSmartChaseEmail(refereeName, refereeEmail, token, requestId, staff,
   
   logAudit(requestId, actorType, staffId, staffName, 'CHASE_EMAIL_SENT', { refereeEmail: refereeEmail });
 }
+
+/**
+ * Extract text content from form data for analysis
+ * @param {Object} formData - Form responses
+ * @returns {string} Combined text content
+ */
+function extractTextContent(formData) {
+  if (!formData || typeof formData !== 'object') {
+    return '';
+  }
+  
+  const textParts = [];
+  for (const key in formData) {
+    if (formData.hasOwnProperty(key)) {
+      const value = formData[key];
+      if (value && typeof value === 'string') {
+        textParts.push(value);
+      } else if (value && typeof value === 'object') {
+        textParts.push(JSON.stringify(value));
+      }
+    }
+  }
+  
+  return textParts.join(' ');
+}
+
+/**
+ * Call Gemini API for analysis
+ * @param {string} apiKey - Gemini API key
+ * @param {string} textContent - Text to analyze
+ * @param {Object} formData - Full form data
+ * @returns {Object} Analysis results
+ */
+function callGeminiAPI(apiKey, textContent, formData) {
+  try {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey;
+    
+    const prompt = `You are an HR expert analyzing a job reference. Analyze the following reference data and provide:
+1. Sentiment Score (Positive/Neutral/Negative)
+2. A brief summary (max 2 sentences)
+3. Any anomalies or red flags
+
+Reference Data:
+${textContent}
+
+Respond in JSON format: {"sentimentScore": "...", "summary": "...", "anomalies": ["..."]}`;
+
+    const payload = {
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }]
+    };
+    
+    const options = {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+    
+    const response = UrlFetchApp.fetch(url, options);
+    const responseCode = response.getResponseCode();
+    
+    if (responseCode !== 200) {
+      Logger.log('Gemini API error: ' + response.getContentText());
+      return {
+        sentimentScore: 'Error',
+        summary: ['API error: ' + responseCode],
+        anomalies: []
+      };
+    }
+    
+    const responseData = JSON.parse(response.getContentText());
+    
+    // Extract text from Gemini response
+    const generatedText = responseData.candidates && responseData.candidates[0] 
+      && responseData.candidates[0].content 
+      && responseData.candidates[0].content.parts 
+      && responseData.candidates[0].content.parts[0]
+      && responseData.candidates[0].content.parts[0].text;
+    
+    if (!generatedText) {
+      return {
+        sentimentScore: 'Error',
+        summary: ['Invalid response from Gemini'],
+        anomalies: []
+      };
+    }
+    
+    // Parse JSON from generated text
+    try {
+      const analysisResult = JSON.parse(generatedText);
+      return {
+        sentimentScore: analysisResult.sentimentScore || 'Neutral',
+        summary: Array.isArray(analysisResult.summary) ? analysisResult.summary : [analysisResult.summary || 'No summary available'],
+        anomalies: Array.isArray(analysisResult.anomalies) ? analysisResult.anomalies : []
+      };
+    } catch (parseErr) {
+      // If Gemini didn't return valid JSON, create summary from text
+      return {
+        sentimentScore: 'Neutral',
+        summary: [generatedText.substring(0, 200)],
+        anomalies: []
+      };
+    }
+    
+  } catch (error) {
+    Logger.log('Error calling Gemini API: ' + error.toString());
+    return {
+      sentimentScore: 'Error',
+      summary: ['Error: ' + error.toString()],
+      anomalies: []
+    };
+  }
+}
+
+/**
+ * Save AI results to AI_Results sheet
+ * @param {string} requestId - Request ID
+ * @param {Object} analysis - Analysis results
+ */
+function saveAIResults(requestId, analysis) {
+  try {
+    const ss = getDatabaseSpreadsheet();
+    let sheet = ss.getSheetByName('AI_Results');
+    
+    if (!sheet) {
+      sheet = ss.insertSheet('AI_Results');
+      sheet.appendRow(['RequestID', 'Timestamp', 'SentimentScore', 'Summary', 'Anomalies', 'RawData']);
+    }
+    
+    const now = new Date();
+    const summaryText = Array.isArray(analysis.summary) ? analysis.summary.join('; ') : analysis.summary;
+    const anomaliesText = Array.isArray(analysis.anomalies) ? analysis.anomalies.join('; ') : '';
+    const rawData = JSON.stringify(analysis);
+    
+    sheet.appendRow([
+      requestId,
+      now,
+      analysis.sentimentScore,
+      summaryText,
+      anomaliesText,
+      rawData
+    ]);
+  } catch (error) {
+    Logger.log('Error saving AI results: ' + error.toString());
+  }
+}
