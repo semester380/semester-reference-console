@@ -199,7 +199,8 @@ function extractTextContent(formData) {
  */
 function callGeminiAPI(apiKey, textContent, formData) {
   try {
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey;
+    // Updated to Gemini 2.5 Flash (current model as of late 2025)
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
     
     const prompt = `You are an HR expert analyzing a job reference. Analyze the following reference data and provide:
 1. Sentiment Score (Positive/Neutral/Negative)

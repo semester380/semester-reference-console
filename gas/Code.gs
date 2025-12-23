@@ -424,6 +424,22 @@ function handleApiRequest(e) {
         // Return array directly for legacy compatibility (Legacy frontend expects Array, not Object)
         result = getAuditTrail(payload.requestId);
         break;
+      case 'diagAndFixRequest':
+        // Diagnostic function to inspect and fix missing tokens
+        result = diagAndFixRequest();
+        break;
+      case 'testGeminiAPI':
+        // Test Gemini API connection
+        result = testGeminiAPI();
+        break;
+      case 'testAIAnalysisOnRequest':
+        // Test AI analysis on specific request
+        result = testAIAnalysisOnRequest(payload.requestId || '695a06e6-1261-4112-b8d4-9b2f6a3ad18e');
+        break;
+      case 'batchAnalyzeReferences':
+        // Run AI analysis on all completed references
+        result = batchAnalyzeReferences();
+        break;
 
       // Admin Only
       case 'initializeDatabase':
@@ -1271,8 +1287,9 @@ function submitReference(token, responses, method, declineReason, declineDetails
     if (method !== 'decline') {
       try {
          // Using safe invocation for AI (UK English spelling)
+         // Pass responses directly to avoid timing issues with data retrieval
          if (typeof analyseReference === 'function') {
-            analyseReference(requestId);
+            analyseReference(requestId, null, responses);
          }
       } catch (aiErr) {
          console.warn('AI Analysis auto-trigger failed:', aiErr);
@@ -1519,15 +1536,31 @@ function getAllAIResults() {
   const data = sheet.getDataRange().getValues();
   const results = {};
   
+  // AI_Results sheet structure:
+  // Column 0: RequestID
+  // Column 1: Timestamp
+  // Column 2: SentimentScore
+  // Column 3: Summary
+  // Column 4: Anomalies
+  // Column 5: RawData
+  
   for (let i = 1; i < data.length; i++) {
     try {
-      results[data[i][0]] = {
-        sentimentScore: data[i][1],
-        summary: JSON.parse(data[i][2]),
-        anomalies: JSON.parse(data[i][3]),
-        timestamp: data[i][4]
+      const requestId = data[i][0];
+      const timestamp = data[i][1];
+      const sentimentScore = data[i][2];
+      const summaryText = data[i][3];
+      const anomaliesText = data[i][4];
+      
+      results[requestId] = {
+        sentimentScore: sentimentScore || 'Unknown',
+        summary: summaryText ? [summaryText] : [],
+        anomalies: anomaliesText ? anomaliesText.split(';').filter(a => a.trim()) : [],
+        timestamp: timestamp
       };
-    } catch (e) {}
+    } catch (e) {
+      console.error('Error parsing AI result row:', e);
+    }
   }
   return results;
 }
@@ -1652,29 +1685,34 @@ function saveTemplate(name, structure, templateId, staff) {
 
 // --- AI & Analysis ---
 
-function analyseReference(requestId, staff) {
+function analyseReference(requestId, staff, formData) {
   // Call the function in AI.gs
-  // We need to expose it here or import it. 
-  // Since they are in the same project, we can call it directly if it's global.
-  // Assuming AI.gs functions are available.
+  // formData can be passed directly (e.g., during submission) or fetched if not provided
   
-  // First, fetch the reference data
-  const request = getRequest(requestId).data;
-  if (!request) return { success: false, error: "Request not found" };
+  let responses = formData;
   
-  // If it's a decline or upload, AI might be limited
-  if (request.responses.declineReason) {
+  // If formData not provided, fetch the reference data
+  if (!responses) {
+    const request = getRequest(requestId).data;
+    if (!request) return { success: false, error: "Request not found" };
+    responses = request.responses;
+  }
+  
+  // Skip AI for declined references
+  if (!responses || responses.declineReason) {
     return { success: true, message: "Skipped AI for declined reference" };
   }
   
   // Log manual trigger
   if (staff) {
     logAudit(requestId, 'Staff', staff.staffId, staff.name, 'AI_ANALYSIS_TRIGGERED', {});
+  } else {
+    logAudit(requestId, 'System', '', 'System', 'AI_ANALYSIS_TRIGGERED', {});
   }
   
   // Call AI module
   if (typeof analyseSentimentAndAnomalies === 'function') {
-    const analysis = analyseSentimentAndAnomalies(requestId, request.responses);
+    const analysis = analyseSentimentAndAnomalies(requestId, responses);
     return { success: true, analysis: analysis };
   } else {
     Logger.log('Error: analyseSentimentAndAnomalies function not found');
