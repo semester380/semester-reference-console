@@ -19,7 +19,7 @@ function testGeminiAPI() {
     }
     
     // 2. Test API call with simple prompt
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=' + apiKey;
     
     const payload = {
       contents: [{
@@ -120,3 +120,27 @@ function testAIAnalysisOnRequest(requestId) {
     };
   }
 }
+
+function listGeminiModels() {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GeminiAPIKey');
+  if (!apiKey) return JSON.stringify({ error: "No API Key found" });
+  
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + apiKey;
+  const options = {
+    method: 'get',
+    muteHttpExceptions: true
+  };
+  
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const content = response.getContentText();
+    try {
+      return JSON.parse(content);
+    } catch (e) {
+      return { error: "Failed to parse API response", raw: content };
+    }
+  } catch (e) {
+    return { error: e.toString() };
+  }
+}
+

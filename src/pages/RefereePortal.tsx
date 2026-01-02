@@ -169,7 +169,7 @@ const RefereePortal: React.FC = () => {
         }
     };
 
-    const handleConsent = async (decision: 'CONSENT_GIVEN' | 'CONSENT_DECLINED' | 'CONSENT_QUERY', payload?: any) => {
+    const handleConsent = async (decision: 'CONSENT_GIVEN' | 'CONSENT_DECLINED' | 'CONSENT_QUERY', payload?: Record<string, unknown>) => {
         setIsSubmitting(true);
         const params = new URLSearchParams(window.location.search);
         const token = params.get('token');

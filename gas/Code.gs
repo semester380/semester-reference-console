@@ -69,13 +69,13 @@ const DEFAULT_TEMPLATE = {
       title: "Ratings & Attributes",
       description: "Please rate the candidate on the following attributes:",
       fields: [
-        { id: "suitableForRole", label: "Suitable for Role", type: "rating", required: true },
-        { id: "punctuality", label: "Punctuality", type: "rating", required: true },
-        { id: "attitude", label: "Attitude to Work", type: "rating", required: true },
-        { id: "reliability", label: "Reliability", type: "rating", required: true },
-        { id: "honesty", label: "Honesty & Integrity", type: "rating", required: true },
-        { id: "initiative", label: "Initiative", type: "rating", required: true },
-        { id: "communication", label: "Communication Skills", type: "rating", required: true },
+        { id: "suitableForRole", label: "Suitable for Role", type: "rating", required: true, layout: "half" },
+        { id: "punctuality", label: "Punctuality", type: "rating", required: true, layout: "half" },
+        { id: "attitude", label: "Attitude to Work", type: "rating", required: true, layout: "half" },
+        { id: "reliability", label: "Reliability", type: "rating", required: true, layout: "half" },
+        { id: "honesty", label: "Honesty & Integrity", type: "rating", required: true, layout: "half" },
+        { id: "initiative", label: "Initiative", type: "rating", required: true, layout: "half" },
+        { id: "communication", label: "Communication Skills", type: "rating", required: true, layout: "half" },
         { id: "furtherInfo", label: "Any further information about the candidate's performance?", type: "textarea", required: false }
       ]
     },
@@ -317,7 +317,7 @@ function handleApiRequest(e) {
       'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
       'submitReference', 'uploadReferenceDocument', 'getTemplates', 
       'authorizeConsent', 'authoriseConsent', 'getDefaultTemplate', 'inspectTemplates',
-      'verifyStaff', 'testGemini', 'runCompleteE2ETest', 'runQA', 'resetTemplates'
+      'verifyStaff', 'testGeminiAPI', 'testAIAnalysisOnRequest', 'batchAnalyzeReferences', 'runCompleteE2ETest', 'runQA', 'resetTemplates'
     ];
     
     const adminOnlyEndpoints = [
@@ -1911,32 +1911,25 @@ function generatePDF(requestId, request) {
         // DEFAULT_TEMPLATE in Code.gs is currently the JSON object structure.
       }
       
-      content = buildFormContent(responses, templateToUse);
+      
+      // Pass AI Analysis if available
+      content = buildFormContent(responses, templateToUse, request.aiAnalysis);
     }
     
 
     
     // Load template
+    // Load template and replace placeholders
     const templateHtml = HtmlService.createHtmlOutputFromFile('PdfTemplate').getContent();
-    
-    // Replace placeholders using simple {{name}} syntax
-    const methodLabels = {
-      'form': 'Online Form',
-      'upload': 'Uploaded Document', 
-      'decline': 'Declined'
-    };
-    
     let html = templateHtml
+      .replace(/\{\{requestId\}\}/g, requestId)
       .replace(/\{\{candidateName\}\}/g, request.candidateName || '')
       .replace(/\{\{candidateEmail\}\}/g, request.candidateEmail || '')
       .replace(/\{\{refereeName\}\}/g, request.refereeName || '')
       .replace(/\{\{refereeEmail\}\}/g, request.refereeEmail || '')
-      .replace(/\{\{requestId\}\}/g, requestId)
-      .replace(/\{\{method\}\}/g, methodLabels[method])
-      .replace(/\{\{methodLabel\}\}/g, methodLabels[method])
-      .replace(/\{\{content\}\}/g, content)
       .replace(/\{\{date\}\}/g, new Date().toLocaleDateString('en-GB'))
-      .replace(/\{\{generatedDate\}\}/g, new Date().toLocaleString('en-GB'));
+      .replace(/\{\{generatedDate\}\}/g, new Date().toLocaleString('en-GB'))
+      .replace(/\{\{content\}\}/g, content);
       
     const htmlOutput = HtmlService.createHtmlOutput(html);
     const blob = htmlOutput.getAs(MimeType.PDF).setName(`Reference - ${request.candidateName} - ${request.refereeName}.pdf`);
@@ -2149,115 +2142,108 @@ function deleteTemplate(templateId, staff) {
 /**
  * Build HTML content for PDF generation
  */
-function buildFormContent(responses, customTemplate) {
+function buildFormContent(responses, customTemplate, aiAnalysis) {
   const template = customTemplate || DEFAULT_TEMPLATE;
+  const getVal = (id) => responses[id] ?? null;
   let html = '';
   
-  // Helper to safely get value
-  const getVal = (id) => {
-    let v = responses[id];
-    if (v === undefined || v === null) return null;
-    return v;
-  };
+  // 1. AI Analysis Section (If Available)
+  if (aiAnalysis && aiAnalysis.summary && aiAnalysis.summary.length > 0) {
+     html += '<div class="section">';
+     html += '<div class="section-header"><div class="section-indicator" style="background-color:#7c3aed;"></div><div class="section-title">Executive Summary (AI)</div></div>';
+     
+     // Split summary for 2 columns
+     const fullSummary = aiAnalysis.summary; // Array of sentences
+     const mid = Math.ceil(fullSummary.length / 2);
+     const col1 = fullSummary.slice(0, mid).join(' ');
+     const col2 = fullSummary.slice(mid).join(' ');
+     
+     html += '<div class="card"><div class="info-grid">';
+     html += '<div class="info-row">';
+     html += '<div class="info-cell" style="vertical-align: top;"><div class="ai-summary-text">' + (col1 || '') + '</div></div>';
+     html += '<div class="info-cell" style="vertical-align: top;"><div class="ai-summary-text">' + (col2 || '') + '</div></div>';
+     html += '</div></div></div></div>';
+  }
 
-  // Build HTML for each section
   template.sections.forEach(section => {
-    // Skip declaration section for now (handled separately with signature)
     if (section.id === 'declaration') return;
     
-    let sectionHtml = '<div class="section">';
-    sectionHtml += '<div class="section-title">' + section.title + '</div>';
-    if (section.description) {
-       sectionHtml += '<div class="section-description">' + section.description + '</div>';
-    }
+    html += '<div class="section">';
+    html += '<div class="section-header"><div class="section-indicator"></div><div class="section-title">' + section.title + '</div></div>';
     
-    // Check if we should use grid (if section contains half-width items)
-    // We'll iterate manually to handle layout
+    html += '<div class="card"><div class="info-grid">';
+    
     let i = 0;
     while(i < section.fields.length) {
       const field = section.fields[i];
       const value = getVal(field.id);
       
-      // Handle Half-Width Pairing
+      html += '<div class="info-row">';
       if (field.layout === 'half') {
-         // Start grid row
-         sectionHtml += '<div class="info-grid" style="margin-bottom: 8px;">';
+         html += buildFieldHtml(field, value, 'half');
          
-         // Item 1
-         sectionHtml += buildFieldHtml(field, value);
-         
-         // Item 2 (if exists and is half)
          const nextField = section.fields[i+1];
          if (nextField && nextField.layout === 'half') {
-            sectionHtml += buildFieldHtml(nextField, getVal(nextField.id));
-            i++; // Skip next
+            html += buildFieldHtml(nextField, getVal(nextField.id), 'half');
+            i++; 
          } else {
-            // Empty spacer if needed, or just end grid
-            sectionHtml += '<div></div>'; 
+            html += '<div class="info-cell"></div>'; 
          }
-         
-         sectionHtml += '</div>'; // End grid
       } else {
-         // Full width
-          sectionHtml += '<div style="margin-bottom: 8px;">';
-          sectionHtml += buildFieldHtml(field, value);
-          sectionHtml += '</div>';
+         html += buildFieldHtml(field, value, 'full');
       }
+      html += '</div>';
       i++;
     }
     
-    sectionHtml += '</div>';
-    html += sectionHtml;
+    html += '</div></div></div>';
   });
   
-  // Build Declaration section with signature
   html += buildDeclarationSection(responses);
-  
   return html;
 }
 
 /**
  * Helper to build single field HTML
  */
-function buildFieldHtml(field, value) {
-  let html = '<div class="question-block">';
-  html += '<div class="question-label">' + field.label + '</div>';
+function buildFieldHtml(field, value, layout) {
+  const isFull = layout === 'full';
+  let html = '<div class="info-cell ' + (isFull ? 'full-width' : '') + '">';
+  html += '<div class="info-label">' + field.label + '</div>';
   
   if (field.type === 'rating') {
     const num = parseInt(value);
-    let label = '-';
     if (!isNaN(num)) {
       const labels = ['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'];
-      // scale 1-5
-      const text = labels[num - 1] || '';
-      label = num + '/5 ' + (text ? '('+text+')' : '');
-    }
-    html += '<div class="answer"><span class="rating-value">' + label + '</span></div>';
-  } else if (field.type === 'boolean') {
-    // Tickbox style
-    const isTrue = (value === true || value === 'true');
-    // Using HTML symbols for checkbox state
-    // ☑ (checked) = &#9745;
-    // ☐ (unchecked) = &#9744;
-    
-    // If it's a specific "Consent" boolean, we might want to show both options?
-    // For general booleans:
-    if (value === null) {
-       html += '<div class="answer">-</div>';
+      const text = labels[num - 1] || 'Unknown';
+      const percentage = (num / 5) * 100;
+      
+      html += '<div class="rating-container">';
+      html += '<div class="rating-text">' + num + '/5</div>';
+      html += '<div class="rating-track"><div class="rating-fill" style="width:' + percentage + '%;"></div></div>';
+      html += '<div class="rating-label-tag">' + text + '</div>';
+      html += '</div>';
     } else {
-       html += '<div class="answer" style="font-size: 14px;">';
-       html += (isTrue ? '&#9745; Yes &nbsp;&nbsp; &#9744; No' : '&#9744; Yes &nbsp;&nbsp; &#9745; No');
+      html += '<div class="info-value">-</div>';
+    }
+  } else if (field.type === 'boolean') {
+    const isTrue = (value === true || value === 'true');
+    if (value === null) {
+       html += '<div class="info-value">-</div>';
+    } else {
+       html += '<div class="info-value" style="display:flex; gap:15px; align-items:center;">';
+       html += '<span style="' + (isTrue ? 'font-weight:700; color:#059669;' : 'color:#9ca3af;') + '">' + (isTrue ? '●' : '○') + ' Yes</span> ';
+       html += '<span style="' + (!isTrue ? 'font-weight:700; color:#dc2626;' : 'color:#9ca3af;') + '">' + (!isTrue ? '●' : '○') + ' No</span>';
        html += '</div>';
     }
   } else if (field.type === 'date') {
     const dateStr = value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
-    html += '<div class="answer">' + dateStr + '</div>';
+    html += '<div class="info-value">' + dateStr + '</div>';
   } else if (field.type === 'textarea') {
-     // Preserve line breaks
      const text = value ? String(value).replace(/\n/g, '<br>') : '-';
-     html += '<div class="answer">' + text + '</div>';
+     html += '<div class="info-value" style="line-height:1.6;">' + text + '</div>';
   } else {
-    html += '<div class="answer">' + (value || '-') + '</div>';
+    html += '<div class="info-value">' + (value || '-') + '</div>';
   }
   
   html += '</div>';
@@ -2307,13 +2293,16 @@ function buildDeclarationSection(responses) {
 
 function buildUploadContent(responses) {
   return '<div class="section">' +
-    '<div class="section-title">Uploaded Reference</div>' +
-    '<div class="upload-info">' +
-    '<div class="info-label">Document Name</div>' +
-    '<div class="info-value">' + (responses.fileName || 'reference_document.pdf') + '</div>' +
-    '<div class="info-label" style="margin-top: 10px;">Document Link</div>' +
-    '<div class="info-value" style="word-break: break-all;">' + (responses.uploadedFileUrl || '') + '</div>' +
-    '</div></div>';
+    '<div class="section-header"><div class="section-indicator"></div><div class="section-title">Reference Document</div></div>' +
+    '<div class="card"><div class="info-grid">' +
+    '<div class="info-row"><div class="info-cell full-width">' +
+    '<div class="info-label">Submission Method</div>' +
+    '<div style="margin-top:5px;"><span class="status-badge status-upload">Document Upload</span></div>' +
+    '</div></div>' +
+    '<div class="info-row"><div class="info-cell half"><div class="info-label">File Name</div><div class="info-value">' + (responses.fileName || 'reference_document.pdf') + '</div></div>' +
+    '<div class="info-cell half"><div class="info-label">Status</div><div class="info-value">Verified</div></div></div>' +
+    '<div class="info-row"><div class="info-cell full-width"><div class="info-label">Resource Link</div><div class="info-value" style="word-break: break-all; color:#0052CC;">' + (responses.uploadedFileUrl || '') + '</div></div></div>' +
+    '</div></div></div>';
 }
 
 function buildDeclineContent(responses) {
@@ -2324,29 +2313,38 @@ function buildDeclineContent(responses) {
     'other': 'Other'
   };
   
-  return '<div class="section decline-box">' +
-    '<div class="section-title">Reference Declined</div>' +
-    '<div class="question-block">' +
-    '<div class="question-label">Reason</div>' +
-    '<div class="answer">' + (reasons[responses.declineReason] || responses.declineReason || 'Not specified') + '</div>' +
-    '</div>' +
+  return '<div class="section">' +
+    '<div class="section-header"><div class="section-indicator" style="background-color:#dc2626;"></div><div class="section-title">Reference Declined</div></div>' +
+    '<div class="card" style="border-color:#fecaca;"><div class="info-grid">' +
+    '<div class="info-row"><div class="info-cell full-width">' +
+    '<div class="info-label">Status</div>' +
+    '<div style="margin-top:5px;"><span class="status-badge status-decline">Referee Declined to Provide</span></div>' +
+    '</div></div>' +
+    '<div class="info-row"><div class="info-cell full-width"><div class="info-label">Reason for Decline</div><div class="info-value">' + (reasons[responses.declineReason] || responses.declineReason || 'Not specified') + '</div></div></div>' +
     (responses.declineDetails ? 
-      '<div class="question-block">' +
-      '<div class="question-label">Additional Details</div>' +
-      '<div class="answer">' + responses.declineDetails + '</div>' +
-      '</div>' : '') +
-    '</div>';
+      '<div class="info-row"><div class="info-cell full-width"><div class="info-label">Additional Feedback</div><div class="info-value">' + responses.declineDetails + '</div></div></div>' : '') +
+    '</div></div></div>';
 }
 
 function buildSignatureContent(signature) {
-  return '<div class="signature-box">' +
-    '<div class="section-title">✍️ Digital Signature</div>' +
-    '<div class="signature-info">' +
-    '<div><div class="info-label">Signed By</div><div class="info-value">' + signature.typedName + '</div></div>' +
-    '<div><div class="info-label">Signed On</div><div class="info-value">' + new Date(signature.signedAt).toLocaleString('en-GB') + '</div></div>' +
+  return '<div class="signature-card">' +
+    '<div class="signature-header">' +
+    '<div class="signature-title">✍️ DIGITAL CERTIFICATION</div>' +
+    '<div class="signature-verified">✓ VERIFIED SIGNATURE</div>' +
     '</div>' +
-    (signature.signatureDataUrl ? '<img src="' + signature.signatureDataUrl + '" class="signature-image" alt="Signature" />' : '') +
-    '<div style="margin-top: 15px; padding: 10px; background-color: #eff6ff; border-radius: 4px; font-size: 11px; color: #1e40af;">✓ Digitally signed and timestamped</div>' +
+    '<div class="signature-body">' +
+    '<div class="signature-visual">' +
+    (signature.signatureDataUrl ? '<img src="' + signature.signatureDataUrl + '" alt="Signature" />' : '<div style="font-family:cursive; font-size:24px; color:#1e40af;">' + signature.typedName + '</div>') +
+    '</div>' +
+    '<div class="timestamp-block">' +
+    '<strong>CERTIFIED BY</strong>' + signature.typedName + '<br><br>' +
+    '<strong>TIMESTAMP</strong>' + new Date(signature.signedAt).toLocaleString('en-GB') + '<br><br>' +
+    '<strong>SECURITY ID</strong>' + Utilities.getUuid().substring(0,8).toUpperCase() +
+    '</div>' +
+    '</div>' +
+    '<div style="margin-top:20px; font-size:8px; color:#9ca3af; text-transform:uppercase; letter-spacing:1px;">' +
+    'This document has been digitally signed and sealed by Semester.co.uk. Any alteration to this document after sealing will invalidate the verification.' +
+    '</div>' +
     '</div>';
 }
 
@@ -2361,15 +2359,53 @@ function getAuditTrail(requestId) {
       trail.push({
         auditId: data[i][0],
         timestamp: data[i][2],
-        actor: data[i][3],
-        action: data[i][4],
-        metadata: data[i][5]
+        actorType: data[i][3],
+        actorId: data[i][4],
+        actorName: data[i][5],
+        action: data[i][6],
+        details: data[i][7]
       });
     }
   }
 
   // Return array directly for legacy frontend compatibility
   return trail;
+}
+
+/**
+ * Retrieve recent debug logs
+ */
+function getDebugLogs() {
+  const ss = getDatabaseSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_DEBUG_LOG);
+  if (!sheet) return [];
+  
+  const data = sheet.getDataRange().getValues();
+  const logs = [];
+  
+  // Return last 100 logs
+  const startRow = Math.max(1, data.length - 100);
+  for (let i = startRow; i < data.length; i++) {
+    logs.push({
+      timestamp: data[i][0],
+      context: data[i][1],
+      message: data[i][2],
+      data: data[i][3]
+    });
+  }
+  
+  return logs.reverse(); // Newest first
+}
+
+/**
+ * Helper to get column index by header name
+ */
+function getCol(name, sheetName = SHEET_REQUESTS) {
+  const ss = getDatabaseSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  return headers.indexOf(name);
 }
 
 /**

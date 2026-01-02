@@ -245,9 +245,10 @@ export const runGAS = async (functionName: string, ...args: unknown[]) => {
 
         return data;
 
-    } catch (e: any) {
+    } catch (e: unknown) {
         console.error('GAS API Error:', e);
-        throw e.message || e.toString();
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        throw errorMessage;
     }
 };
 

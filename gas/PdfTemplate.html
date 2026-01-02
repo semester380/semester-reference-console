@@ -4,6 +4,8 @@
 <head>
   <meta charset="utf-8">
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
     * {
       margin: 0;
       padding: 0;
@@ -11,35 +13,54 @@
     }
 
     body {
-      font-family: 'Helvetica Neue', Arial, sans-serif;
-      color: #1f2937;
-      line-height: 1.5;
-      padding: 25px 30px;
-      max-width: 800px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #111827;
+      line-height: 1.3;
+      /* Tighter line height */
+      padding: 20px 30px;
+      /* Reduced padding */
+      max-width: 840px;
       margin: 0 auto;
-      font-size: 11px;
+      font-size: 10px;
+      /* Slightly smaller base font */
+      background-color: white;
+    }
+
+    /* Print-specific adjustments */
+    @media print {
+      body {
+        padding: 0;
+      }
+
+      .page-break {
+        page-break-before: always;
+      }
     }
 
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      /* Center alignment like original */
       margin-bottom: 20px;
+      /* Reduced margin */
       padding-bottom: 15px;
+      /* Reduced padding */
       position: relative;
     }
 
-    .header::after {
-      content: '';
+    .header-accent {
       position: absolute;
       bottom: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
+      left: -30px;
+      /* Match body padding */
+      right: -30px;
+      height: 3px;
+      /* Slightly thinner */
       background: linear-gradient(90deg, #0052CC 0%, #5E17EB 50%, #FF0080 100%);
-      border-radius: 2px;
     }
 
+    /* Reverted Logo Styles */
     .logo {
       display: flex;
       flex-direction: column;
@@ -48,292 +69,372 @@
     }
 
     .logo svg {
-      height: 40px;
+      height: 35px;
+      /* Slightly smaller */
       width: auto;
     }
 
     .logo-text {
-      font-size: 18px;
+      font-size: 16px;
+      /* Reverted size */
       font-weight: bold;
       color: #111827;
-      letter-spacing: 3px;
+      letter-spacing: 2px;
+      margin-top: 5px;
     }
 
-    .header-right {
+    .logo-subtext {
+      font-size: 9px;
+      letter-spacing: 1.5px;
+      color: #374151;
+      margin-top: 2px;
+      text-transform: uppercase;
+    }
+
+    .header-metadata {
       text-align: right;
+    }
+
+    .header-metadata .doc-status {
+      display: inline-block;
+      padding: 3px 10px;
+      /* Reduced padding */
+      background-color: #f3f4f6;
+      border-radius: 999px;
+      font-size: 8px;
+      /* Smaller */
+      font-weight: 700;
+      color: #374151;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+
+    .header-metadata .request-id {
+      font-size: 9px;
+      color: #6b7280;
+      font-family: monospace;
+    }
+
+    .title-banner {
+      margin-bottom: 15px;
+      /* Reduced margin */
+    }
+
+    .title-banner h1 {
+      font-size: 20px;
+      /* Reduced size */
+      font-weight: 800;
+      color: #111827;
+      letter-spacing: -0.5px;
+    }
+
+    .title-banner p {
       font-size: 10px;
       color: #6b7280;
-    }
-
-    .title {
-      font-size: 18px;
-      font-weight: bold;
-      color: #111827;
-      margin: 15px 0 10px 0;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #e5e7eb;
+      margin-top: 2px;
     }
 
     .section {
-      margin: 15px 0;
-      padding: 12px 15px;
-      background-color: #f9fafb;
-      border-radius: 6px;
-      border-left: 3px solid #0052CC;
+      margin-bottom: 15px;
+      /* Reduced margin to fit on page */
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      /* Reduced margin */
+      padding-bottom: 4px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .section-indicator {
+      width: 3px;
+      height: 12px;
+      background-color: #0052CC;
+      border-radius: 2px;
     }
 
     .section-title {
-      font-size: 12px;
-      font-weight: 600;
-      color: #0052CC;
-      margin-bottom: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #111827;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
-    .section-description {
-      font-size: 10px;
-      color: #6b7280;
+    .card {
+      background-color: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      /* Smaller radius */
+      overflow: hidden;
       margin-bottom: 10px;
-      font-style: italic;
+      /* Reduced margin */
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .card-content {
+      padding: 0;
     }
 
     .info-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      display: table;
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      /* FIXED COLUMNS */
     }
 
-    .info-item {
-      padding: 10px;
-      background-color: white;
-      border-radius: 4px;
-      border: 1px solid #e5e7eb;
+    .info-row {
+      display: table-row;
+    }
+
+    .info-cell {
+      display: table-cell;
+      padding: 8px 12px;
+      /* Reduced padding */
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: top;
+      width: 50%;
+      /* FORCE 50% WIDTH */
+    }
+
+    .info-cell.full-width {
+      width: 100%;
+    }
+
+    .info-cell:last-child {
+      border-right: none;
     }
 
     .info-label {
-      font-size: 9px;
+      font-size: 8px;
+      /* Smaller */
       font-weight: 600;
       color: #6b7280;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
 
     .info-value {
-      font-size: 11px;
+      font-size: 10px;
       color: #111827;
       font-weight: 500;
     }
 
-    .method-badge {
+    /* Rating Visualization */
+    .rating-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 3px;
+    }
+
+    .rating-track {
+      flex: 1;
+      height: 5px;
+      /* Thinner */
+      background-color: #f3f4f6;
+      border-radius: 3px;
+      overflow: hidden;
+      max-width: 120px;
+      /* Smaller max width */
+    }
+
+    .rating-fill {
+      height: 100%;
+      background-color: #0052CC;
+      border-radius: 3px;
+    }
+
+    .rating-text {
+      font-size: 9px;
+      font-weight: 700;
+      color: #0052CC;
+    }
+
+    .rating-label-tag {
       display: inline-block;
-      padding: 4px 10px;
-      background-color: #dbeafe;
+      padding: 1px 6px;
+      background-color: #eff6ff;
       color: #1e40af;
-      border-radius: 4px;
-      font-size: 10px;
+      border-radius: 3px;
+      font-size: 8px;
       font-weight: 600;
+      margin-left: 6px;
+    }
+
+    /* Signature Block */
+    .signature-card {
+      background-color: #fafafa;
+      border: 1px dashed #d1d5db;
+      border-radius: 8px;
+      padding: 15px;
+      /* Reduced padding */
+      margin-top: 20px;
+    }
+
+    .signature-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .signature-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #111827;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .signature-verified {
+      font-size: 8px;
+      font-weight: 600;
+      color: #059669;
+      background-color: #ecfdf5;
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+
+    .signature-body {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 15px;
+      align-items: flex-start;
+    }
+
+    .signature-visual {
+      background-color: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      padding: 8px;
+      height: 80px;
+      /* Smaller */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .signature-visual img {
+      max-height: 60px;
+      max-width: 100%;
+    }
+
+    .timestamp-block {
+      font-size: 8px;
+      color: #6b7280;
+    }
+
+    .timestamp-block strong {
+      color: #111827;
+      display: block;
+      margin-bottom: 1px;
+    }
+
+    /* Status Badges */
+    .status-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 8px;
+      font-weight: 700;
       text-transform: uppercase;
     }
 
-    .method-badge.upload {
+    .status-upload {
       background-color: #fef3c7;
       color: #92400e;
     }
 
-    .method-badge.decline {
+    .status-decline {
       background-color: #fee2e2;
       color: #991b1b;
     }
 
-    .question-block {
-      margin: 8px 0;
-      padding: 8px 10px;
-      background-color: white;
-      border-radius: 4px;
-      border: 1px solid #e5e7eb;
+    .status-form {
+      background-color: #dcfce7;
+      color: #166534;
     }
 
-    .question-label {
-      font-size: 10px;
-      font-weight: 600;
-      color: #374151;
-      margin-bottom: 4px;
-    }
-
-    .answer {
+    /* AI Summary Text */
+    .ai-summary-text {
       font-size: 11px;
-      color: #1f2937;
-    }
-
-    .answer-yes {
-      color: #059669;
-      font-weight: 600;
-    }
-
-    .answer-no {
-      color: #dc2626;
-      font-weight: 600;
-    }
-
-    /* Ratings Grid - Compact 2-column layout */
-    .ratings-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-
-    .rating-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 10px;
-      background-color: white;
-      border-radius: 4px;
-      border: 1px solid #e5e7eb;
-    }
-
-    .rating-label {
-      font-size: 10px;
+      /* Bigger than base 10px */
+      line-height: 1.5;
       color: #374151;
       font-weight: 500;
-    }
-
-    .rating-value {
-      font-size: 10px;
-      font-weight: 600;
-      color: #0052CC;
-      background-color: #dbeafe;
-      padding: 2px 8px;
-      border-radius: 3px;
-    }
-
-    /* Declaration section */
-    .declaration-section {
-      background-color: #f0f9ff;
-      border-left-color: #0052CC;
-    }
-
-    .declaration-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-    }
-
-    .declaration-item {
-      padding: 8px;
-      background-color: white;
-      border-radius: 4px;
-      border: 1px solid #e5e7eb;
-    }
-
-    /* Signature box */
-    .signature-box {
-      margin: 12px 0;
-      padding: 12px;
-      background-color: white;
-      border: 2px solid #0052CC;
-      border-radius: 6px;
-    }
-
-    .signature-box .section-title {
-      color: #0052CC;
-      margin-bottom: 8px;
-    }
-
-    .signature-info {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    .signature-image {
-      max-width: 200px;
-      margin: 10px 0;
-      padding: 8px;
-      background-color: #f9fafb;
-      border: 1px solid #e5e7eb;
-      border-radius: 4px;
-    }
-
-    .timestamp-badge {
-      margin-top: 10px;
-      padding: 6px 10px;
-      background-color: #ecfdf5;
-      border-radius: 4px;
-      font-size: 9px;
-      color: #065f46;
-      display: inline-block;
-    }
-
-    /* Declined reference styling */
-    .decline-box {
-      background-color: #fef2f2;
-      border-left-color: #dc2626;
-    }
-
-    .decline-box .section-title {
-      color: #dc2626;
-    }
-
-    /* Upload reference styling */
-    .upload-info {
-      background-color: #eff6ff;
-      padding: 12px;
-      border-radius: 4px;
-      border: 1px solid #3b82f6;
+      text-align: justify;
     }
 
     /* Footer */
     .footer {
       margin-top: 30px;
       padding-top: 15px;
-      border-top: 1px solid #e5e7eb;
-      text-align: center;
+      border-top: 1px solid #f3f4f6;
     }
 
     .footer-content {
-      font-size: 10px;
-      color: #6b7280;
-      line-height: 1.4;
+      text-align: center;
+      font-size: 8px;
+      color: #9ca3af;
+      line-height: 1.5;
     }
 
-    .footer-content a {
-      color: #0052CC;
-      text-decoration: none;
+    .footer-brand {
+      color: #6b7280;
+      font-weight: 600;
+      margin-bottom: 3px;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-size: 8px;
     }
   </style>
 </head>
 
 <body>
   <div class="header">
+    <!-- Reverted Logo Structure -->
     <div class="logo">
-      <!-- Semester logo: 3 colored dots -->
       <svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="15" cy="20" r="15" fill="#0052CC" />
         <circle cx="50" cy="20" r="15" fill="#5E17EB" />
         <circle cx="85" cy="20" r="15" fill="#FF0080" />
       </svg>
-      <div style="margin-top: 8px;">
+      <div style="margin-top: 2px;">
         <div class="logo-text">SEMESTER.CO.UK</div>
-        <div style="font-size: 10px; letter-spacing: 2px; color: #374151; margin-top: 2px;">RECRUITING PROFESSIONALS
-        </div>
+        <div class="logo-subtext">RECRUITING PROFESSIONALS</div>
       </div>
     </div>
-    <div class="header-right">
-      <div style="font-size: 16px; font-weight: bold; color: #111827;">Reference Request Form</div>
-      <div style="margin-top: 4px;">Request ID: {{requestId}}</div>
+
+    <div class="header-metadata">
+      <div class="doc-status">Official Reference Report</div>
+      <div class="request-id">ID: {{requestId}}</div>
     </div>
+    <div class="header-accent"></div>
+  </div>
+
+  <div class="title-banner">
+    <h1>Reference Report</h1>
+    <p>Generated for <strong>{{candidateName}}</strong> • Confirmed and Sealed</p>
   </div>
 
   <!-- Main Content -->
   {{content}}
 
   <div class="footer">
+    <div class="footer-brand">SEMESTER RECRUITMENT</div>
     <div class="footer-content">
-      0161 419 9285 • <a href="mailto:info@semester.co.uk">info@semester.co.uk</a> • <a
-        href="https://semester.co.uk">semester.co.uk</a> • Cedars Business Centre, Pontefract WF9 4PU
+      0161 419 9285 • <a href="mailto:info@semester.co.uk"
+        style="color:#0052CC; text-decoration:none;">info@semester.co.uk</a> • <a href="https://semester.co.uk"
+        style="color:#0052CC; text-decoration:none;">semester.co.uk</a><br>
+      Cedars Business Centre, Pontefract WF9 4PU • Professional Background Screening Services
     </div>
   </div>
 </body>

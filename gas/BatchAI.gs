@@ -40,8 +40,8 @@ function batchAnalyzeReferences() {
       
       results.total++;
       
-      // Skip if already analyzed (has sentiment score)
-      if (currentSentiment && currentSentiment !== '' && currentSentiment !== 'Not Configured') {
+      // Skip if already analyzed (has sentiment score), UNLESS it was an error
+      if (currentSentiment && currentSentiment !== '' && currentSentiment !== 'Not Configured' && currentSentiment !== 'Error') {
         results.skipped++;
         results.details.push({
           requestId: requestId,

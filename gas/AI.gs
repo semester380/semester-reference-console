@@ -1,317 +1,227 @@
 /**
- * Semester Reference Console - AI & Automation Module
- * Handles Gemini API integration and intelligent automation
- * Note: getDatabaseSpreadsheet and logAudit are defined in Code.gs
+ * AI.gs
+ * Handles interaction with Gemini API for specialized analysis
  */
 
 /**
- * Analyse sentiment and detect anomalies using Gemini API
- * @param {string} requestId - Request ID
- * @param {Object} formData - Submitted form data
- * @returns {Object} Analysis results
+ * Checks if the Gemini API is configured
+ */
+function isGeminiConfigured() {
+  const key = PropertiesService.getScriptProperties().getProperty('GeminiAPIKey');
+  return !!key;
+}
+
+/**
+ * Main function to analyse reference sentiment and anomalies
+ * @param {string} requestId - The ID of the request
+ * @param {Object} formData - The response data from the reference
  */
 function analyseSentimentAndAnomalies(requestId, formData) {
   try {
-    const geminiApiKey = PropertiesService.getScriptProperties().getProperty('GeminiAPIKey');
-    
-    if (!geminiApiKey) {
-      Logger.log('Gemini API key not configured');
+    const apiKey = PropertiesService.getScriptProperties().getProperty('GeminiAPIKey');
+    if (!apiKey) {
+      Logger.log('AI Analysis skipped: GeminiAPIKey not set');
       return {
-        configured: false,
-        sentimentScore: 'Not Configured',
-        summary: ['AI analysis not configured. Set GeminiAPIKey in Script Properties.'],
+        sentimentScore: 'Error',
+        summary: ['AI not configured'],
         anomalies: []
       };
     }
+
+    // Prepare content for analysis
+    let contentToAnalyze = '';
     
-    // Extract text fields for analysis
-    const textContent = extractTextContent(formData);
+    // Safety check for formData
+    if (!formData) {
+       return { sentimentScore: 'Error', summary: ['No data to analyze'], anomalies: [] };
+    }
+
+    // Format Q&A pairs
+    for (const [key, value] of Object.entries(formData)) {
+      if (['candidateName', 'refereeName', 'refereeEmail', 'relationship', 'uploadedFileUrl'].includes(key)) continue;
+      // Skip metadata or complex objects (like signature)
+      if (typeof value === 'object') continue;
+      
+      contentToAnalyze += `Question (${key}): ${value}\n`;
+    }
+
+    if (!contentToAnalyze.trim()) {
+        contentToAnalyze = "No text responses provided.";
+    }
+
+    // Call Gemini
+    const analysis = callGeminiAPI(apiKey, contentToAnalyze, formData);
     
-    // Call Gemini API
-    const analysis = callGeminiAPI(geminiApiKey, textContent, formData);
+    // Log result
+    Logger.log('AI Analysis Result for ' + requestId + ': ' + JSON.stringify(analysis));
     
-    // Update Requests_Log with results
-    updateRequestAnalysis(requestId, analysis);
+    // Clean up summary array if needed
+    if (analysis.summary && !Array.isArray(analysis.summary)) {
+        analysis.summary = [analysis.summary];
+    }
     
-    // Save full results to AI_Results sheet
-    saveAIResults(requestId, analysis);
+    // Clean up anomalies array
+    if (analysis.anomalies && !Array.isArray(analysis.anomalies)) {
+        analysis.anomalies = [analysis.anomalies];
+    }
+
+    // Store in Sheet
+    saveAIResult(requestId, analysis);
     
-    return Object.assign({ configured: true }, analysis);
+    return analysis;
+
   } catch (error) {
     Logger.log('Error in analyseSentimentAndAnomalies: ' + error.toString());
     return {
-      configured: true,
       sentimentScore: 'Error',
-      summary: ['Error analysing reference: ' + error.toString()],
+      summary: ['Analysis failed: ' + error.toString()],
       anomalies: []
     };
   }
 }
-/**
- * Update request with analysis results
- * @param {string} requestId - Request ID
- * @param {Object} analysis - Analysis results
- */
-function updateRequestAnalysis(requestId, analysis) {
-  const ss = getDatabaseSpreadsheet();
-  const requestsSheet = ss.getSheetByName('Requests_Log');
-  const data = requestsSheet.getDataRange().getValues();
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === requestId) {
-      requestsSheet.getRange(i + 1, 9).setValue(analysis.sentimentScore); // SentimentScore
-      requestsSheet.getRange(i + 1, 10).setValue(analysis.anomalies.length > 0); // AnomalyFlag
-      break;
-    }
-  }
-}
 
 /**
- * Run smart chase automation (triggered by time-driven trigger)
- */
-function runSmartChase(staff) {
-  try {
-    const ss = getDatabaseSpreadsheet();
-    const requestsSheet = ss.getSheetByName('Requests_Log');
-    const data = requestsSheet.getDataRange().getValues();
-    
-    const now = new Date();
-    
-    for (let i = 1; i < data.length; i++) {
-      const status = data[i][6]; // Status is column 7 (index 6)
-      const lastChaseDate = data[i][23]; // LastChaseDate is column 24 (index 23)
-      
-      // Only chase if status is 'PENDING_CONSENT' or 'CONSENT_GIVEN' (waiting for referee)
-      // Actually, we want to chase if Consent is Given but Reference is NOT Completed
-      // Status 'CONSENT_GIVEN' implies waiting for referee.
-      if (status !== 'CONSENT_GIVEN') {
-        continue;
-      }
-      
-      // Check if we should send a chase
-      const daysSinceLastChase = lastChaseDate 
-        ? (now - new Date(lastChaseDate)) / (1000 * 60 * 60 * 24)
-        : 999;
-      
-      if (daysSinceLastChase >= 3) {
-        const requestId = data[i][0];
-        const candidateName = data[i][1];
-        const refereeName = data[i][3];
-        const refereeEmail = data[i][4];
-        const token = data[i][11]; // RefereeToken is column 12 (index 11)
-        
-        sendSmartChaseEmail(refereeName, refereeEmail, token, requestId, staff, candidateName);
-        
-        // Update last chase date (Column 24)
-        requestsSheet.getRange(i + 1, 24).setValue(now);
-      }
-    }
-  } catch (error) {
-    Logger.log('Error in runSmartChase: ' + error.toString());
-  }
-}
-
-/**
- * Send chase reminder email
- * @param {string} refereeName - Referee name
- * @param {string} refereeEmail - Referee email
- * @param {string} token - Referee token
- * @param {string} requestId - Request ID
- * @param {Object} staff - Staff object
- * @param {string} candidateName - Candidate name
- */
-function sendSmartChaseEmail(refereeName, refereeEmail, token, requestId, staff, candidateName) {
-  const portalBaseUrl = PropertiesService.getScriptProperties().getProperty('PORTAL_BASE_URL') || ScriptApp.getService().getUrl();
-  // Ensure no double slash
-  const baseUrl = portalBaseUrl.endsWith('/') ? portalBaseUrl.slice(0, -1) : portalBaseUrl;
-  const formUrl = baseUrl + '?view=portal&token=' + token;
-  
-  const subject = 'Friendly reminder: reference request for ' + (candidateName || 'Candidate');
-  
-  const content = `
-    <div style="text-align: center; margin-bottom: 30px;">
-       <h2 style="color: #111827; font-weight: 600; margin: 0;">Reference Reminder</h2>
-    </div>
-    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">Dear ${refereeName},</p>
-    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">We wanted to follow up on the reference request we sent you. If you have a spare moment, we would really appreciate your feedback.</p>
-    <p style="color: #4b5563; line-height: 1.6; margin-bottom: 16px;">You have three convenient options:</p>
-    <ul style="color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
-    <li><strong>Complete a short online form</strong></li>
-    <li><strong>Upload your own reference document</strong></li>
-    <li><strong>Decline</strong> if you are unable to provide a reference</li>
-    </ul>
-    <div style="margin: 32px 0; text-align: center;">
-       <a href="${formUrl}" style="background-color: #0052CC; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">Provide Reference</a>
-    </div>
-    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;" />
-    <p style="color: #9ca3af; font-size: 13px; text-align: center;">Thank you again for your help.<br/>The Semester Team</p>
-  `;
-  
-  // Use global sendBrandedEmail if available
-  try {
-     if (typeof sendBrandedEmail === 'function') {
-        sendBrandedEmail(refereeEmail, subject, content);
-     } else {
-        GmailApp.sendEmail(refereeEmail, subject, '', { htmlBody: content });
-     }
-  } catch(e) {
-     console.error('Error sending smart chase: ' + e.toString());
-  }
-  
-  const staffId = staff ? staff.staffId : '';
-  const staffName = staff ? staff.name : 'System';
-  const actorType = staff ? 'Staff' : 'System';
-  
-  logAudit(requestId, actorType, staffId, staffName, 'CHASE_EMAIL_SENT', { refereeEmail: refereeEmail });
-}
-
-/**
- * Extract text content from form data for analysis
- * @param {Object} formData - Form responses
- * @returns {string} Combined text content
- */
-function extractTextContent(formData) {
-  if (!formData || typeof formData !== 'object') {
-    return '';
-  }
-  
-  const textParts = [];
-  for (const key in formData) {
-    if (formData.hasOwnProperty(key)) {
-      const value = formData[key];
-      if (value && typeof value === 'string') {
-        textParts.push(value);
-      } else if (value && typeof value === 'object') {
-        textParts.push(JSON.stringify(value));
-      }
-    }
-  }
-  
-  return textParts.join(' ');
-}
-
-/**
- * Call Gemini API for analysis
- * @param {string} apiKey - Gemini API key
- * @param {string} textContent - Text to analyze
- * @param {Object} formData - Full form data
- * @returns {Object} Analysis results
+ * Calls the Gemini API with the constructed prompt
+ * Implements fallback logic to try multiple models
  */
 function callGeminiAPI(apiKey, textContent, formData) {
-  try {
-    // Updated to Gemini 2.5 Flash (current model as of late 2025)
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-    
-    const prompt = `You are an HR expert analyzing a job reference. Analyze the following reference data and provide:
+  // 1. Prepare Prompt
+  const prompt = `You are an HR expert analyzing a job reference. Analyze the following reference data and provide:
 1. Sentiment Score (Positive/Neutral/Negative)
 2. A brief summary (max 2 sentences)
-3. Any anomalies or red flags
+3. Any anomalies or red flags (contradictions, concerning language)
 
-Reference Data:
+Reference Context:
+Candidate: ${formData.candidateName || 'Unknown'}
+Referee: ${formData.refereeName || 'Unknown'}
+Email: ${formData.refereeEmail || 'Unknown'}
+
+Questions & Responses:
 ${textContent}
 
-Respond in JSON format: {"sentimentScore": "...", "summary": "...", "anomalies": ["..."]}`;
+Format the output strictly as JSON:
+{
+  "sentimentScore": "Positive/Neutral/Negative",
+  "summary": ["Summary point 1", "Summary point 2"],
+  "anomalies": ["Anomaly 1", "Anomaly 2"]
+}`;
 
-    const payload = {
-      contents: [{
-        parts: [{
-          text: prompt
-        }]
+  // 2. Prepare Payload
+  const payload = {
+    contents: [{
+      parts: [{
+        text: prompt
       }]
-    };
-    
-    const options = {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    };
-    
-    const response = UrlFetchApp.fetch(url, options);
-    const responseCode = response.getResponseCode();
-    
-    if (responseCode !== 200) {
-      Logger.log('Gemini API error: ' + response.getContentText());
-      return {
-        sentimentScore: 'Error',
-        summary: ['API error: ' + responseCode],
-        anomalies: []
-      };
-    }
-    
-    const responseData = JSON.parse(response.getContentText());
-    
-    // Extract text from Gemini response
-    const generatedText = responseData.candidates && responseData.candidates[0] 
-      && responseData.candidates[0].content 
-      && responseData.candidates[0].content.parts 
-      && responseData.candidates[0].content.parts[0]
-      && responseData.candidates[0].content.parts[0].text;
-    
-    if (!generatedText) {
-      return {
-        sentimentScore: 'Error',
-        summary: ['Invalid response from Gemini'],
-        anomalies: []
-      };
-    }
-    
-    // Parse JSON from generated text
+    }]
+  };
+
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  // 3. Try Models in Sequence
+  // Based on listModels diagnostic: gemini-flash-latest, gemini-2.5-flash-lite, and gemini-pro-latest are available.
+  const models = ['gemini-flash-latest', 'gemini-2.0-flash', 'gemini-pro-latest'];
+  
+  let allErrors = [];
+  let successResponse = null;
+  let usedModel = null;
+
+  for (const model of models) {
     try {
-      const analysisResult = JSON.parse(generatedText);
-      return {
-        sentimentScore: analysisResult.sentimentScore || 'Neutral',
-        summary: Array.isArray(analysisResult.summary) ? analysisResult.summary : [analysisResult.summary || 'No summary available'],
-        anomalies: Array.isArray(analysisResult.anomalies) ? analysisResult.anomalies : []
-      };
-    } catch (parseErr) {
-      // If Gemini didn't return valid JSON, create summary from text
-      return {
-        sentimentScore: 'Neutral',
-        summary: [generatedText.substring(0, 200)],
-        anomalies: []
-      };
+      Logger.log('Attempting AI analysis with model: ' + model);
+      const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey;
+      
+      const response = UrlFetchApp.fetch(url, options);
+      const responseCode = response.getResponseCode();
+      
+      if (responseCode === 200) {
+        successResponse = response.getContentText();
+        usedModel = model;
+        Logger.log('Success with model: ' + model);
+        break; 
+      } else {
+        const errorMsg = model + ': ' + responseCode + ' (' + response.getContentText().substring(0, 50) + ')';
+        Logger.log(errorMsg);
+        allErrors.push(errorMsg);
+      }
+    } catch (e) {
+      const errorMsg = model + ' Exception: ' + e.toString();
+      Logger.log(errorMsg);
+      allErrors.push(errorMsg);
     }
-    
-  } catch (error) {
-    Logger.log('Error calling Gemini API: ' + error.toString());
+  }
+
+  // 4. Handle Failure
+  if (!successResponse) {
     return {
-      sentimentScore: 'Error',
-      summary: ['Error: ' + error.toString()],
+      sentimentScore: "Error",
+      summary: ["All models failed. Details: " + allErrors.join(' | ')],
+      anomalies: []
+    };
+  }
+
+  // 5. Parse Success Response
+  try {
+    const json = JSON.parse(successResponse);
+    const content = json.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!content) throw new Error('Empty response content');
+    
+    // Clean markdown
+    const cleaned = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleaned);
+    
+  } catch (e) {
+    Logger.log('Error parsing AI response: ' + e.toString());
+    return {
+      sentimentScore: "Error",
+      summary: ["Parsing Error: " + e.toString()],
       anomalies: []
     };
   }
 }
 
 /**
- * Save AI results to AI_Results sheet
- * @param {string} requestId - Request ID
- * @param {Object} analysis - Analysis results
+ * Saves AI results to the hidden AI_Results sheet
  */
-function saveAIResults(requestId, analysis) {
+function saveAIResult(requestId, analysis) {
   try {
-    const ss = getDatabaseSpreadsheet();
+    // Check if sheet exists, if not create/get it safely (helper in Code.gs usually handles this)
+    const ss = getDatabaseSpreadsheet(); 
     let sheet = ss.getSheetByName('AI_Results');
     
     if (!sheet) {
       sheet = ss.insertSheet('AI_Results');
-      sheet.appendRow(['RequestID', 'Timestamp', 'SentimentScore', 'Summary', 'Anomalies', 'RawData']);
+      sheet.appendRow(['RequestId', 'Timestamp', 'Sentiment', 'Summary', 'Anomalies', 'FullJSON']);
     }
     
-    const now = new Date();
-    const summaryText = Array.isArray(analysis.summary) ? analysis.summary.join('; ') : analysis.summary;
-    const anomaliesText = Array.isArray(analysis.anomalies) ? analysis.anomalies.join('; ') : '';
-    const rawData = JSON.stringify(analysis);
+    const timestamp = new Date();
     
     sheet.appendRow([
       requestId,
-      now,
+      timestamp,
       analysis.sentimentScore,
-      summaryText,
-      anomaliesText,
-      rawData
+      (analysis.summary || []).join('. '),
+      (analysis.anomalies || []).join('. '),
+      JSON.stringify(analysis)
     ]);
-  } catch (error) {
-    Logger.log('Error saving AI results: ' + error.toString());
+    
+  } catch (e) {
+    Logger.log('Failed to save AI result to sheet: ' + e.toString());
   }
+}
+
+/**
+ * Helper to get DB spreadsheet (duplicated here to ensure standalone functioning if needed, 
+ * but connects to main DB logic)
+ */
+function getDatabaseSpreadsheet() {
+  // Use the ID from Properties or fallback to active
+  const dbId = PropertiesService.getScriptProperties().getProperty('DatabaseSheetId');
+  if (dbId) return SpreadsheetApp.openById(dbId);
+  return SpreadsheetApp.getActiveSpreadsheet();
 }
