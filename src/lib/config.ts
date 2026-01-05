@@ -3,8 +3,8 @@
  * Centralizes environment variables and provides fallbacks for production reliability
  */
 
-// The confirmed working GAS Deployment ID - v179 (Original ID) with gemini-2.5-flash AI fix
-const WORKING_GAS_ID = 'AKfycbwBqKOnO7WxlWhDR4AD6k69-u76DKVTEYx-O-auZAJRZONunIfAV_IHe-7afbtqOSs';
+// Current Deployment: @204 (Fixed deleteTemplate permissions + E2E endpoints)
+export const WORKING_GAS_ID = 'AKfycbyiG1DdI9LHscZJ-DZNRlCBsNNxEgqO1T-Toj2KtQNveZFrIDgyvCEw6EKLRVTVUupc';
 
 // Known broken IDs to ignore if they appear in environment variables
 const BROKEN_GAS_IDS = [
