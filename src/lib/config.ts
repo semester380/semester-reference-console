@@ -3,8 +3,8 @@
  * Centralizes environment variables and provides fallbacks for production reliability
  */
 
-// Current Deployment: @204 (Fixed deleteTemplate permissions + E2E endpoints)
-export const WORKING_GAS_ID = 'AKfycbyiG1DdI9LHscZJ-DZNRlCBsNNxEgqO1T-Toj2KtQNveZFrIDgyvCEw6EKLRVTVUupc';
+// Current Deployment: @205 (Fixed Admin fallback active:true)
+export const WORKING_GAS_ID = 'AKfycbyc6KKhylmE9An55ry-Preq9hw8Lu6UousoQropTuMYcwjpjNoaxfupPoA2UCxzybQI';
 
 // Known broken IDs to ignore if they appear in environment variables
 const BROKEN_GAS_IDS = [
