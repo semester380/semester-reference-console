@@ -302,11 +302,29 @@
       border-radius: 999px;
     }
 
-    .signature-body {
-      display: grid;
-      grid-template-columns: 2fr 1fr;
+    .declaration-grid {
+      display: flex;
+      flex-wrap: wrap;
       gap: 15px;
-      align-items: flex-start;
+      margin-bottom: 20px;
+      align-items: flex-end;
+    }
+
+    .declaration-item {
+      flex: 1;
+      min-width: 0; /* Allow shrinking */
+    }
+
+    /* Compact label/value for declaration */
+    .declaration-item .info-label {
+      margin-bottom: 1px;
+    }
+
+    .declaration-item .info-value {
+      font-size: 9px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .signature-visual {
