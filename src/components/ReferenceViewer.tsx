@@ -39,9 +39,11 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
     const [requestData, setRequestData] = useState<Request | null>(null);
 
     useEffect(() => {
-        loadRequestData();
+        if (user?.email) {
+            loadRequestData();
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [requestId]);
+    }, [requestId, user]);
 
     useEffect(() => {
         if (showAudit && auditTrail.length === 0) {
@@ -51,11 +53,13 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
     }, [showAudit]);
 
     const loadRequestData = async () => {
+        if (!user?.email) return;
+
         try {
             console.log('Loading request data for:', requestId);
             // Fetch full request details
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const response = await runGAS('getMyRequests', { includeArchived: true, userEmail: user?.email }) as { success: boolean; data: Request[] };
+            const response = await runGAS('getMyRequests', { includeArchived: true, userEmail: user.email }) as { success: boolean; data: Request[] };
             console.log('API Response:', response);
 
             if (response && response.data) {
@@ -75,11 +79,12 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
     };
 
     const loadAuditTrail = async () => {
+        if (!user?.email) return;
         setIsLoadingAudit(true);
         try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let response = await runGAS('getAuditTrail', { requestId, userEmail: user?.email }) as any;
+            let response = await runGAS('getAuditTrail', { requestId, userEmail: user.email }) as any;
 
             // Handle stringified JSON responses (legacy or double-encoded)
             if (typeof response === 'string') {
@@ -118,10 +123,11 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
         if (!confirm('Are you sure you want to seal this reference? This action cannot be undone.')) {
             return;
         }
+        if (!requestData?.requestId || !user?.email) return;
 
         setIsSealing(true);
         try {
-            const result = await runGAS('sealRequest', { requestId, userEmail: user?.email }) as { success: boolean; error?: string };
+            const result = await runGAS('sealRequest', { requestId, userEmail: user.email }) as { success: boolean; error?: string };
             if (result.success) {
                 alert('Reference sealed successfully!');
                 if (onSealed) onSealed();
@@ -141,11 +147,11 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
     const [isDownloading, setIsDownloading] = useState(false);
 
     const handleDownloadPDF = async () => {
-        if (!requestData?.requestId) return;
+        if (!requestData?.requestId || !user?.email) return;
 
         try {
             setIsDownloading(true);
-            const result = await runGAS('downloadPdfPayload', { requestId: requestData.requestId });
+            const result = await runGAS('downloadPdfPayload', { requestId: requestData.requestId, userEmail: user.email });
 
             if (result && result.success && result.fileData) {
                 // Convert Base64 to Blob
