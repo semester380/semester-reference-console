@@ -3,8 +3,8 @@
  * Centralizes environment variables and provides fallbacks for production reliability
  */
 
-// Current Deployment: @205 (Fixed Admin fallback active:true)
-export const WORKING_GAS_ID = 'AKfycbyc6KKhylmE9An55ry-Preq9hw8Lu6UousoQropTuMYcwjpjNoaxfupPoA2UCxzybQI';
+// Current Deployment: @206 (Fixed Admin fallback role property)
+export const WORKING_GAS_ID = 'AKfycbxDviGsV4xa4vjF3ZV4h0N8WxPyDBty9jNbOQfPKcwaKhWk3vhjcskPGNn3VtBi-WBP';
 
 // Known broken IDs to ignore if they appear in environment variables
 const BROKEN_GAS_IDS = [
