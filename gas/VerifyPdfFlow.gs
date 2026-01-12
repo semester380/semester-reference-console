@@ -6,11 +6,24 @@
 function verifyPdfEndToEnd() {
   console.log("Starting PDF E2E Verification...");
   
-  // 1. Initiate
+  // 1. Initiate Standard Request
+  console.log('--- TEST 1: STANDARD REFERENCE ---');
+  let pdf1 = runTestCycle("Standard Test", false);
+  console.log("Standard PDF: " + pdf1);
+  
+  // 2. Initiate Long Request (Stress Test)
+  console.log('--- TEST 2: LONG REFERENCE (STRESS) ---');
+  let pdf2 = runTestCycle("Long Content Test", true);
+  console.log("Long/Compact PDF: " + pdf2);
+  
+  return { standard: pdf1, compact: pdf2 };
+}
+
+function runTestCycle(nameSuffix, isStress) {
   const reqData = {
-    candidateName: "Pdf Test Candidate",
+    candidateName: "Pdf Candidate " + nameSuffix,
     candidateEmail: "candidate@example.com",
-    refereeName: "Pdf Test Referee",
+    refereeName: "Pdf Referee " + nameSuffix,
     refereeEmail: "referee@example.com",
     templateId: "standard-social-care"
   };
@@ -26,77 +39,61 @@ function verifyPdfEndToEnd() {
   }
   
   const requestId = initRes.requestId;
-  console.log("Request Initiated: " + requestId);
   
-  // 2. Get Consent Token from Sheet (Helper)
+  // Get Tokens
   const ss = getDatabaseSpreadsheet();
-  const sheet = ss.getSheetByName("Requests_Log"); // Hardcoded based on constant
+  const sheet = ss.getSheetByName("Requests_Log");
   const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const colConsentToken = headers.indexOf("ConsentToken");
-  const colRefereeToken = headers.indexOf("RefereeToken");
-  
-  // Find row
-  let rowIdx = -1;
-  for(let i=1; i<data.length; i++){
-    if(data[i][0] === requestId) {
-      rowIdx = i;
-      break;
-    }
-  }
+  let rowIdx = data.findIndex(r => r[0] === requestId);
   
   if (rowIdx === -1) return "ROW_NOT_FOUND";
-  const consentToken = data[rowIdx][colConsentToken];
-  console.log("Consent Token found: " + consentToken?.substring(0,5)+"...");
+  const consentToken = data[rowIdx][25] || data[rowIdx][9]; // Try hard to find it, schema varies
+  const refereeToken = data[rowIdx][27] || data[rowIdx][11]; // Heuristic column guess based on Code.gs init
   
-  // 3. Grant Consent
-  processCandidateConsent(consentToken, 'CONSENT_GIVEN');
-  console.log("Consent Granted");
+  // Just grab from getRequest to be safe
+  const req = getRequest(requestId).data;
   
-  // 4. Get Referee Token (Refresh data)
-  const data2 = sheet.getDataRange().getValues();
-  const refereeToken = data2[rowIdx][colRefereeToken]; // Row index matches (data hasn't shifted hopefully)
-  // Or re-find to be safe? Row index should be stable for append-only log unless concurrent edits.
+  // Grant Consent
+  processCandidateConsent(req.consentToken, 'CONSENT_GIVEN');
   
-  console.log("Referee Token found: " + refereeToken?.substring(0,5)+"...");
-
-  // 5. Submit Reference
+  // Prepare Responses
   const responses = {
     "dateStarted": "2020-01-01",
     "dateEnded": "2023-01-01",
-    "jobTitle": "Tester",
-    "reasonForLeaving": "End of project",
-    "safeguardingConcerns": false,
+    "jobTitle": "Senior Care Specialist",
+    "reasonForLeaving": isStress ? lorem(50) : "End of contract.",
+    "safeguardingConcerns": isStress, // True triggers details
+    "safeguardingDetails": isStress ? lorem(30) : "",
     "disciplinaryAction": false,
     "suitableForRole": "5",
-    "punctuality": "5",
+    "punctuality": "4",
     "attitude": "5",
     "reliability": "5",
     "honesty": "5",
-    "initiative": "5",
+    "initiative": "4",
     "communication": "5",
-    "furtherInfo": "Good.",
+    "furtherInfo": isStress ? lorem(100) : "Excellent candidate.",
     "characterReservations": false,
     "shouldNotBeEmployed": false,
     "consentToShare": true,
-    "refereeName": "Pdf Test Referee",
+    "refereeName": reqData.refereeName,
     "refereePosition": "Manager",
     "refereeCompany": "Test Co", 
     "refereeTelephone": "12345",
     "refereeEmailConfirm": "referee@example.com",
-    "signature": { typedName: "Pdf Test Referee", signedAt: new Date().toISOString() }
+    "signature": { typedName: reqData.refereeName, signedAt: new Date().toISOString() }
   };
   
-  submitReference(refereeToken, responses, 'form');
-  console.log("Reference Submitted");
+  submitReference(req.refereeToken, responses, 'form');
   
-  // 6. Seal & Generate PDF
+  // Seal
   const sealRes = sealRequest(requestId, staff);
-  if (!sealRes.success) {
-     console.error("Seal failed: " + sealRes.error);
-     return "SEAL_FAILED";
-  }
-  
-  console.log("PDF Verified URL: " + sealRes.pdfUrl);
-  return sealRes.pdfUrl;
+  return sealRes.success ? sealRes.pdfUrl : sealRes.error;
+}
+
+function lorem(words) {
+  const str = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ";
+  let res = "";
+  while (res.split(' ').length < words) res += str;
+  return res;
 }

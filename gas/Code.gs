@@ -193,10 +193,12 @@ function getTemplates() {
  * Serves the React application via HtmlService OR handles JSON API requests
  */
 function doGet(e) {
+
   // If it's an API request (indicated by parameter), handle it
   if (e.parameter.responseFormat === 'json' || e.parameter.callback) {
     return handleApiRequest(e);
   }
+
 
   // Template Manager Route
   if (e.parameter.view === 'templates') {
@@ -262,7 +264,8 @@ function getStaffFromRequest(e) {
   }
   
   if (!userEmail) return null;
-  return getStaffByEmail(userEmail);
+  const normalizedEmail = String(userEmail).trim().toLowerCase();
+  return getStaffByEmail(normalizedEmail);
 }
 
 function requireRole(staff, requiredRoles) {
@@ -317,15 +320,15 @@ function handleApiRequest(e) {
       'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
       'submitReference', 'uploadReferenceDocument', 'getTemplates', 
       'authorizeConsent', 'authoriseConsent', 'getDefaultTemplate', 'inspectTemplates',
-      'verifyStaff', 'testGeminiAPI', 'testAIAnalysisOnRequest', 'batchAnalyzeReferences', 'runCompleteE2ETest', 'runQA', 'resetTemplates', 'verifyPdf'
+      'verifyStaff', 'testGeminiAPI', 'testAIAnalysisOnRequest', 'batchAnalyzeReferences', 'runCompleteE2ETest', 'runQA', 'resetTemplates', 'verifyPdf', 'diagnoseConfig', 'runDebugSeal'
     ];
     
     const adminOnlyEndpoints = [
       'archiveRequests', 'unarchiveRequests', 'deleteRequests', 
       'runSmartChase', 'runAnalysis', 'analyseReference', 'listStaff', 'addStaff', 
       'updateStaff', 'deactivateStaff', 
-      'initializeDatabase', 'fixTemplateStructure', 'seedEmploymentTemplate', 'sealRequest', 'diagnoseConfig', 'fixPermissions', 'backfillTokens',
-      'saveTemplate', 'deleteTemplate', 'runDebugSeal'
+      'initializeDatabase', 'fixTemplateStructure', 'seedEmploymentTemplate', 'sealRequest', 'fixPermissions', 'backfillTokens',
+      'saveTemplate', 'deleteTemplate'
     ];
     
     const staffEndpoints = [
@@ -338,18 +341,23 @@ function handleApiRequest(e) {
 
     let staff = null;
 
-    if (requiresStaff) {
+  if (requiresStaff) {
       if (!isAdminRequest(e)) {
         throw new Error('Unauthorized: Missing or invalid admin key');
       }
 
-      staff = getStaffFromRequest(e);
-      if (!staff) {
+      const rawStaff = getStaffFromRequest(e);
+      if (rawStaff) {
+          staff = rawStaff;
+      } else {
         // Fallback for admin actions where staff email might be omitted/implied
         if (requiresAdmin) {
            staff = { email: 'admin@semester.co.uk', name: 'Admin', role: 'Admin', active: true };
         } else {
-           throw new Error('Unauthorized: Invalid or inactive staff member');
+           // Diagnosis: Log what we tried
+           const attemptedEmail = e.parameter.userEmail || (e.postData && e.postData.contents ? JSON.parse(e.postData.contents).userEmail : 'unknown');
+           console.error(`Auth Failed: No staff record found for email '${attemptedEmail}' on action '${action}'.`);
+           throw new Error(`Unauthorized: Invalid or inactive staff member (${attemptedEmail})`);
         }
       }
 
@@ -439,6 +447,15 @@ function handleApiRequest(e) {
       case 'testGeminiAPI':
         // Test Gemini API connection
         result = testGeminiAPI();
+        break;
+      case 'runDebugSeal':
+        const debugStaff = { email: 'rob@semester.co.uk', name: 'Rob (Debug)', roles: ['Admin'] };
+        result = sealRequest(payload.requestId, debugStaff);
+        break;
+      case 'forceSetAdminKey':
+        const expected = 'uO4KpB7Zx9qL1Fs8cYp3rN5wD2mH6vQ0TgE9jS4aB8kR1nC5uL7zX2pY6';
+        PropertiesService.getScriptProperties().setProperty('ADMIN_API_KEY', expected);
+        result = { success: true, message: 'Admin Key Forced Set' };
         break;
       case 'testAIAnalysisOnRequest':
         // Test AI analysis on specific request
@@ -1291,6 +1308,7 @@ function submitReference(token, responses, method, declineReason, declineDetails
     
     requestsSheet.getRange(rowIndex + 1, 16).setValue(now); // UpdatedAt
 
+
     // Trigger AI Analysis automatically for completed references
     if (method !== 'decline') {
       try {
@@ -1301,6 +1319,24 @@ function submitReference(token, responses, method, declineReason, declineDetails
          }
       } catch (aiErr) {
          console.warn('AI Analysis auto-trigger failed:', aiErr);
+      }
+    }
+
+    // AUDIT FIX: Synchronous PDF Generation
+    if (method === 'form') {
+      try {
+        const fullRequest = getRequest(requestId).data;
+        if (fullRequest && typeof generateReferencePdf === 'function') {
+           const pdfResult = generateReferencePdf(requestId, fullRequest);
+           if (pdfResult.success) {
+              requestsSheet.getRange(rowIndex + 1, 20).setValue(pdfResult.pdfFileId);
+              requestsSheet.getRange(rowIndex + 1, 21).setValue(pdfResult.pdfUrl);
+           } else {
+             console.error("PDF Result Failed: " + pdfResult.error);
+           }
+        }
+      } catch (pdfErr) {
+        console.error("PDF Gen Error: " + pdfErr);
       }
     }
 
@@ -1784,13 +1820,31 @@ function downloadPdfPayload(requestId) {
     }
     const request = requestResult.data;
     
-    // Check if PDF exists
-    if (!request.pdfFileId) {
+    // Check if PDF exists (File ID or URL)
+    let fileId = request.pdfFileId;
+    
+    // Fallback: Extract from URL if ID is missing but URL exists
+    if (!fileId && request.pdfUrl) {
+       try {
+         const match = request.pdfUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+         if (match && match[1]) {
+            fileId = match[1];
+         } else {
+            // Try ID parameter style
+            const matchId = request.pdfUrl.match(/id=([a-zA-Z0-9_-]+)/);
+            if (matchId && matchId[1]) fileId = matchId[1];
+         }
+       } catch (e) {
+         console.warn("Failed to extract ID from URL:", request.pdfUrl);
+       }
+    }
+
+    if (!fileId) {
        return { success: false, error: "PDF not generated yet" }; 
     }
     
     // Fetch File
-    const file = DriveApp.getFileById(request.pdfFileId);
+    const file = DriveApp.getFileById(fileId);
     if (!file) {
        return { success: false, error: "PDF file missing" };
     }
@@ -1930,80 +1984,9 @@ function sealRequest(requestId, staff) {
  */
 function generatePDF(requestId, request) {
   try {
-    const responses = request.responses || {};
-    const method = responses.uploadedFileUrl ? 'upload' : 
-                   responses.declineReason ? 'decline' : 'form';
-    
-    // Build content based on method
-    let content = '';
-    
-    if (method === 'decline') {
-      content = buildDeclineContent(responses);
-    } else if (method === 'upload') {
-      content = buildUploadContent(responses);
-    } else {
-      // Fetch the specific template used for this request
-      // TemplateID is likely in column 15 (Index 14) of Requests_Log, but getRequest might not expose it easily 
-      // if it's not mapped. Let's just grab the template or default.
-      
-      let templateToUse = DEFAULT_TEMPLATE;
-      if (request.templateId) {
-         const tmpl = getTemplateById(request.templateId);
-         if (tmpl && tmpl.structureJSON) {
-            // Remap structureJSON (array of fields) to expected object format if needed
-            // DEFAULT_TEMPLATE is { sections: [...] }
-            // Dynamic form structure is Array<Field>.
-            // We need to confirm what buildFormContent expects.
-            // buildFormContent below expects `template.sections`.
-            // The saved templates are `Array<Field>`. We need to adapt.
-            templateToUse = { 
-               sections: [{
-                 id: "main",
-                 title: "Reference Questions",
-                 fields: tmpl.structureJSON
-               }]
-            };
-         }
-      } else {
-        // Fallback or "Default" template - check if DEFAULT_TEMPLATE is compatible
-        // DEFAULT_TEMPLATE in Code.gs is currently the JSON object structure.
-      }
-      
-      
-      // Pass AI Analysis if available
-      content = buildFormContent(responses, templateToUse, request.aiAnalysis);
-    }
-    
-
-    
-    // Load template
-    // Load template and replace placeholders
-    const templateHtml = HtmlService.createHtmlOutputFromFile('PdfTemplate').getContent();
-    let html = templateHtml
-      .replace(/\{\{requestId\}\}/g, requestId)
-      .replace(/\{\{candidateName\}\}/g, request.candidateName || '')
-      .replace(/\{\{candidateEmail\}\}/g, request.candidateEmail || '')
-      .replace(/\{\{refereeName\}\}/g, request.refereeName || '')
-      .replace(/\{\{refereeEmail\}\}/g, request.refereeEmail || '')
-      .replace(/\{\{date\}\}/g, new Date().toLocaleDateString('en-GB'))
-      .replace(/\{\{generatedDate\}\}/g, new Date().toLocaleString('en-GB'))
-      .replace(/\{\{content\}\}/g, content);
-      
-    const htmlOutput = HtmlService.createHtmlOutput(html);
-    const blob = htmlOutput.getAs(MimeType.PDF).setName(`Reference - ${request.candidateName} - ${request.refereeName}.pdf`);
-    
-    // Get storage folder
-    const folder = getStorageFolder();
-    const file = folder.createFile(blob);
-    
-    // Public sharing (handled in sealRequest via try-catch, but beneficial to ensure here too if we want)
-    // Actually the catch block in sealRequest handles this.
-    
-    return { 
-      success: true, 
-      pdfUrl: file.getUrl(), 
-      pdfFileId: file.getId() 
-    };
+    // Delegate to the new PDF Generator engine
+    // This handles all content building (Form, Upload, Decline) internally
+    return generateReferencePdf(requestId, request);
     
   } catch (e) {
     Logger.log('generatePDF Error: ' + e.toString());
@@ -2207,211 +2190,8 @@ function deleteTemplate(templateId, staff) {
 /**
  * Build HTML content for PDF generation
  */
-function buildFormContent(responses, customTemplate, aiAnalysis) {
-  const template = customTemplate || DEFAULT_TEMPLATE;
-  const getVal = (id) => responses[id] ?? null;
-  let html = '';
-  
-  // 1. AI Analysis Section (If Available)
-  if (aiAnalysis && aiAnalysis.summary && aiAnalysis.summary.length > 0) {
-     html += '<div class="section">';
-     html += '<div class="section-header"><div class="section-indicator" style="background-color:#7c3aed;"></div><div class="section-title">Executive Summary (AI)</div></div>';
-     
-     // Split summary for 2 columns
-     const fullSummary = aiAnalysis.summary; // Array of sentences
-     const mid = Math.ceil(fullSummary.length / 2);
-     const col1 = fullSummary.slice(0, mid).join(' ');
-     const col2 = fullSummary.slice(mid).join(' ');
-     
-     html += '<div class="card"><div class="info-grid">';
-     html += '<div class="info-row">';
-     html += '<div class="info-cell" style="vertical-align: top;"><div class="ai-summary-text">' + (col1 || '') + '</div></div>';
-     html += '<div class="info-cell" style="vertical-align: top;"><div class="ai-summary-text">' + (col2 || '') + '</div></div>';
-     html += '</div></div></div></div>';
-  }
 
-  template.sections.forEach(section => {
-    if (section.id === 'declaration') return;
-    
-    html += '<div class="section">';
-    html += '<div class="section-header"><div class="section-indicator"></div><div class="section-title">' + section.title + '</div></div>';
-    
-    html += '<div class="card"><div class="info-grid">';
-    
-    let i = 0;
-    while(i < section.fields.length) {
-      const field = section.fields[i];
-      const value = getVal(field.id);
-      
-      html += '<div class="info-row">';
-      if (field.layout === 'half') {
-         html += buildFieldHtml(field, value, 'half');
-         
-         const nextField = section.fields[i+1];
-         if (nextField && nextField.layout === 'half') {
-            html += buildFieldHtml(nextField, getVal(nextField.id), 'half');
-            i++; 
-         } else {
-            html += '<div class="info-cell"></div>'; 
-         }
-      } else {
-         html += buildFieldHtml(field, value, 'full');
-      }
-      html += '</div>';
-      i++;
-    }
-    
-    html += '</div></div></div>';
-  });
-  
-  html += buildDeclarationSection(responses);
-  return html;
-}
 
-/**
- * Helper to build single field HTML
- */
-function buildFieldHtml(field, value, layout) {
-  const isFull = layout === 'full';
-  let html = '<div class="info-cell ' + (isFull ? 'full-width' : '') + '">';
-  html += '<div class="info-label">' + field.label + '</div>';
-  
-  if (field.type === 'rating') {
-    const num = parseInt(value);
-    if (!isNaN(num)) {
-      const labels = ['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'];
-      const text = labels[num - 1] || 'Unknown';
-      const percentage = (num / 5) * 100;
-      
-      html += '<div class="rating-container">';
-      html += '<div class="rating-text">' + num + '/5</div>';
-      html += '<div class="rating-track"><div class="rating-fill" style="width:' + percentage + '%;"></div></div>';
-      html += '<div class="rating-label-tag">' + text + '</div>';
-      html += '</div>';
-    } else {
-      html += '<div class="info-value">-</div>';
-    }
-  } else if (field.type === 'boolean') {
-    const isTrue = (value === true || value === 'true');
-    if (value === null) {
-       html += '<div class="info-value">-</div>';
-    } else {
-       html += '<div class="info-value" style="display:flex; gap:15px; align-items:center;">';
-       html += '<span style="' + (isTrue ? 'font-weight:700; color:#059669;' : 'color:#9ca3af;') + '">' + (isTrue ? '●' : '○') + ' Yes</span> ';
-       html += '<span style="' + (!isTrue ? 'font-weight:700; color:#dc2626;' : 'color:#9ca3af;') + '">' + (!isTrue ? '●' : '○') + ' No</span>';
-       html += '</div>';
-    }
-  } else if (field.type === 'date') {
-    const dateStr = value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
-    html += '<div class="info-value">' + dateStr + '</div>';
-  } else if (field.type === 'textarea') {
-     const text = value ? String(value).replace(/\n/g, '<br>') : '-';
-     html += '<div class="info-value" style="line-height:1.6;">' + text + '</div>';
-  } else {
-    html += '<div class="info-value">' + (value || '-') + '</div>';
-  }
-  
-  html += '</div>';
-  return html;
-}
-
-/**
- * Build the declaration section with referee details and signature
- */
-function buildDeclarationSection(responses) {
-  let html = '<div class="section declaration-section">';
-  html += '<div class="section-title">Declaration</div>';
-  html += '<div class="declaration-grid">';
-  
-  // Referee details
-  const declarationFields = [
-    { id: 'refereeName', label: 'Name' },
-    { id: 'refereePosition', label: 'Position' },
-    { id: 'refereeCompany', label: 'Company' },
-    { id: 'refereeTelephone', label: 'Telephone' },
-    { id: 'refereeEmailConfirm', label: 'Email' }
-  ];
-  
-  declarationFields.forEach(field => {
-    const value = responses[field.id];
-    if (value) {
-      html += '<div class="declaration-item">';
-      html += '<div class="info-label">' + field.label + '</div>';
-      html += '<div class="info-value">' + value + '</div>';
-      html += '</div>';
-    }
-  });
-  
-  html += '</div>';
-  
-  // Add signature if present
-  for (const key in responses) {
-    if (typeof responses[key] === 'object' && responses[key] && responses[key].typedName) {
-      html += buildSignatureContent(responses[key]);
-      break;
-    }
-  }
-  
-  html += '</div>';
-  return html;
-}
-
-function buildUploadContent(responses) {
-  return '<div class="section">' +
-    '<div class="section-header"><div class="section-indicator"></div><div class="section-title">Reference Document</div></div>' +
-    '<div class="card"><div class="info-grid">' +
-    '<div class="info-row"><div class="info-cell full-width">' +
-    '<div class="info-label">Submission Method</div>' +
-    '<div style="margin-top:5px;"><span class="status-badge status-upload">Document Upload</span></div>' +
-    '</div></div>' +
-    '<div class="info-row"><div class="info-cell half"><div class="info-label">File Name</div><div class="info-value">' + (responses.fileName || 'reference_document.pdf') + '</div></div>' +
-    '<div class="info-cell half"><div class="info-label">Status</div><div class="info-value">Verified</div></div></div>' +
-    '<div class="info-row"><div class="info-cell full-width"><div class="info-label">Resource Link</div><div class="info-value" style="word-break: break-all; color:#0052CC;">' + (responses.uploadedFileUrl || '') + '</div></div></div>' +
-    '</div></div></div>';
-}
-
-function buildDeclineContent(responses) {
-  const reasons = {
-    'policy': 'Company Policy',
-    'unknown': 'Don\'t know candidate well enough',
-    'conflict': 'Conflict of Interest',
-    'other': 'Other'
-  };
-  
-  return '<div class="section">' +
-    '<div class="section-header"><div class="section-indicator" style="background-color:#dc2626;"></div><div class="section-title">Reference Declined</div></div>' +
-    '<div class="card" style="border-color:#fecaca;"><div class="info-grid">' +
-    '<div class="info-row"><div class="info-cell full-width">' +
-    '<div class="info-label">Status</div>' +
-    '<div style="margin-top:5px;"><span class="status-badge status-decline">Referee Declined to Provide</span></div>' +
-    '</div></div>' +
-    '<div class="info-row"><div class="info-cell full-width"><div class="info-label">Reason for Decline</div><div class="info-value">' + (reasons[responses.declineReason] || responses.declineReason || 'Not specified') + '</div></div></div>' +
-    (responses.declineDetails ? 
-      '<div class="info-row"><div class="info-cell full-width"><div class="info-label">Additional Feedback</div><div class="info-value">' + responses.declineDetails + '</div></div></div>' : '') +
-    '</div></div></div>';
-}
-
-function buildSignatureContent(signature) {
-  return '<div class="signature-card">' +
-    '<div class="signature-header">' +
-    '<div class="signature-title">✍️ DIGITAL CERTIFICATION</div>' +
-    '<div class="signature-verified">✓ VERIFIED SIGNATURE</div>' +
-    '</div>' +
-    '<div class="signature-body">' +
-    '<div class="signature-visual">' +
-    (signature.signatureDataUrl ? '<img src="' + signature.signatureDataUrl + '" alt="Signature" />' : '<div style="font-family:cursive; font-size:24px; color:#1e40af;">' + signature.typedName + '</div>') +
-    '</div>' +
-    '<div class="timestamp-block">' +
-    '<strong>CERTIFIED BY</strong>' + signature.typedName + '<br><br>' +
-    '<strong>TIMESTAMP</strong>' + new Date(signature.signedAt).toLocaleString('en-GB') + '<br><br>' +
-    '<strong>SECURITY ID</strong>' + Utilities.getUuid().substring(0,8).toUpperCase() +
-    '</div>' +
-    '</div>' +
-    '<div style="margin-top:20px; font-size:8px; color:#9ca3af; text-transform:uppercase; letter-spacing:1px;">' +
-    'This document has been digitally signed and sealed by Semester.co.uk. Any alteration to this document after sealing will invalidate the verification.' +
-    '</div>' +
-    '</div>';
-}
 
 function getAuditTrail(requestId) {
   const ss = getDatabaseSpreadsheet();

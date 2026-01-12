@@ -95,3 +95,45 @@ export const Loader: React.FC<LoaderProps> = ({ size = 'md' }) => {
         </div>
     );
 };
+
+interface SkeletonProps {
+    className?: string;
+    lines?: number;
+    variant?: 'text' | 'card' | 'table';
+}
+
+export const Skeleton: React.FC<SkeletonProps> = ({ className = '', lines = 1, variant = 'text' }) => {
+    if (variant === 'card') {
+        return (
+            <div className={`animate-pulse ${className}`}>
+                <div className="bg-nano-gray-200 rounded-lg h-4 mb-2"></div>
+                <div className="bg-nano-gray-200 rounded h-3 mb-1 w-3/4"></div>
+                <div className="bg-nano-gray-200 rounded h-3 w-1/2"></div>
+            </div>
+        );
+    }
+
+    if (variant === 'table') {
+        return (
+            <div className={`animate-pulse space-y-3 ${className}`}>
+                {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex space-x-4">
+                        <div className="bg-nano-gray-200 rounded h-4 w-4 flex-shrink-0"></div>
+                        <div className="bg-nano-gray-200 rounded h-4 flex-1"></div>
+                        <div className="bg-nano-gray-200 rounded h-4 w-20"></div>
+                        <div className="bg-nano-gray-200 rounded h-4 w-16"></div>
+                        <div className="bg-nano-gray-200 rounded h-4 w-24"></div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    return (
+        <div className={`animate-pulse space-y-2 ${className}`}>
+            {Array.from({ length: lines }).map((_, i) => (
+                <div key={i} className={`bg-nano-gray-200 rounded h-4 ${i === lines - 1 ? 'w-3/4' : 'w-full'}`}></div>
+            ))}
+        </div>
+    );
+};
