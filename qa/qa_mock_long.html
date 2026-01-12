@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <meta charset="utf-8">
+   <style>
+      /* Robust Font Stack - Inter or System */
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+      :root {
+         /* Semester Brand Palette */
+         --brand-blue: #0052CC;
+         --brand-plum: #5E17EB;
+         --brand-pink: #FF0080;
+
+         /* UI Colors */
+         --primary: #0052CC;
+         /* Use Brand Blue as Primary */
+         --secondary: #334155;
+         --accent: #3b82f6;
+         --border: #e2e8f0;
+         --bg-card: #ffffff;
+         --bg-page: #ffffff;
+         --text-main: #1e293b;
+         --text-muted: #64748b;
+
+         /* Spacing */
+         --gap-section: 20px;
+         --gap-row: 10px;
+         --pad-card: 14px;
+      }
+
+      /* Reset */
+      * {
+         margin: 0;
+         padding: 0;
+         box-sizing: border-box;
+      }
+
+      body {
+         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         color: var(--text-main);
+         line-height: 1.4;
+         font-size: 10pt;
+         background: var(--bg-page);
+         width: 100%;
+         padding: 30px 40px 60px 40px;
+         /* Screen view padding */
+      }
+
+      /* Print Setup - The Source of Truth */
+      @media print {
+         @page {
+            margin: 0;
+            size: A4;
+         }
+
+         body {
+            width: 100%;
+            padding: 30px 40px 50px 40px;
+            /* Fixed print padding */
+            -webkit-print-color-adjust: exact;
+         }
+
+         .page-break {
+            page-break-before: always;
+            height: 1px;
+            display: block;
+         }
+      }
+
+      /* Compact Mode */
+      body.compact-mode {
+         --gap-section: 12px;
+         --gap-row: 6px;
+         --pad-card: 10px;
+         font-size: 9pt;
+         line-height: 1.3;
+      }
+
+      body.compact-mode .header {
+         margin-bottom: 20px;
+         padding-bottom: 10px;
+      }
+
+      body.compact-mode .footer {
+         font-size: 7pt;
+         height: 25px;
+      }
+
+      /* --- Branding & Header --- */
+      .header {
+         display: flex;
+         justify-content: space-between;
+         align-items: flex-end;
+         border-bottom: 3px solid var(--primary);
+         padding-bottom: 15px;
+         margin-bottom: 25px;
+      }
+
+      .logo-block {
+         display: flex;
+         flex-direction: column;
+         gap: 2px;
+      }
+
+      .logo-row {
+         display: flex;
+         align-items: center;
+         gap: 6px;
+      }
+
+      /* The 3-Dot Logo */
+      .brand-dots {
+         display: flex;
+         gap: 3px;
+         align-items: center;
+      }
+
+      .dot {
+         width: 8px;
+         height: 8px;
+         border-radius: 50%;
+      }
+
+      .dot-1 {
+         background-color: var(--brand-blue);
+      }
+
+      .dot-2 {
+         background-color: var(--brand-plum);
+      }
+
+      .dot-3 {
+         background-color: var(--brand-pink);
+      }
+
+      .logo-text {
+         font-size: 20px;
+         font-weight: 800;
+         letter-spacing: -0.5px;
+         color: var(--brand-blue);
+         line-height: 1;
+      }
+
+      .logo-slogan {
+         font-size: 8px;
+         text-transform: uppercase;
+         letter-spacing: 2px;
+         color: var(--secondary);
+         font-weight: 600;
+         margin-top: 4px;
+      }
+
+      .meta-block {
+         text-align: right;
+      }
+
+      .doc-type {
+         font-size: 9px;
+         font-weight: 700;
+         color: var(--text-muted);
+         text-transform: uppercase;
+         letter-spacing: 1px;
+      }
+
+      .doc-ref {
+         font-size: 8px;
+         font-family: monospace;
+         color: var(--text-muted);
+         margin-top: 4px;
+      }
+
+      /* --- Content Layout --- */
+      .section {
+         margin-bottom: var(--gap-section);
+         break-inside: avoid;
+      }
+
+      .section-header {
+         display: flex;
+         align-items: center;
+         gap: 8px;
+         margin-bottom: 8px;
+      }
+
+      .section-indicator {
+         width: 4px;
+         height: 14px;
+         background: var(--brand-pink);
+         border-radius: 2px;
+      }
+
+      .section-title {
+         font-size: 10pt;
+         font-weight: 700;
+         text-transform: uppercase;
+         color: var(--secondary);
+         letter-spacing: 0.5px;
+      }
+
+      .card {
+         background: var(--bg-card);
+         border: 1px solid var(--border);
+         border-radius: 6px;
+         padding: var(--pad-card);
+         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+      }
+
+      .info-grid {
+         display: block;
+         width: 100%;
+      }
+
+      .info-row {
+         display: flex;
+         width: 100%;
+         margin-bottom: var(--gap-row);
+         border-bottom: 1px dashed #e2e8f0;
+         padding-bottom: var(--gap-row);
+      }
+
+      .info-row:last-child {
+         margin-bottom: 0;
+         border-bottom: none;
+         padding-bottom: 0;
+      }
+
+      .info-cell {
+         flex: 1;
+         min-width: 0;
+         padding-right: 15px;
+      }
+
+      .info-cell:last-child {
+         padding-right: 0;
+      }
+
+      .info-cell.half {
+         width: 50%;
+         flex: 0 0 50%;
+      }
+
+      .info-cell.full-width {
+         width: 100%;
+         flex: 0 0 100%;
+      }
+
+      .info-label {
+         font-size: 7.5pt;
+         font-weight: 700;
+         text-transform: uppercase;
+         color: var(--text-muted);
+         margin-bottom: 3px;
+         letter-spacing: 0.3px;
+      }
+
+      .info-value {
+         font-size: 10pt;
+         font-weight: 500;
+         color: var(--text-main);
+         word-wrap: break-word;
+      }
+
+      body.compact-mode .info-value {
+         font-size: 9pt;
+      }
+
+      /* Ratings */
+      .rating-container {
+         display: flex;
+         align-items: center;
+         gap: 8px;
+         margin-top: 2px;
+      }
+
+      .rating-num {
+         font-weight: 700;
+         color: var(--brand-blue);
+         font-size: 9pt;
+         width: 28px;
+      }
+
+      .rating-track {
+         flex: 1;
+         height: 6px;
+         background: #f1f5f9;
+         border-radius: 3px;
+         overflow: hidden;
+         max-width: 80px;
+      }
+
+      .rating-fill {
+         height: 100%;
+         background: var(--accent);
+      }
+
+      .rating-text {
+         font-size: 8pt;
+         font-weight: 600;
+         color: var(--secondary);
+      }
+
+      /* Status Styling */
+      .status-badge {
+         display: inline-block;
+         padding: 2px 6px;
+         border-radius: 4px;
+         font-size: 8pt;
+         font-weight: 700;
+         text-transform: uppercase;
+      }
+
+      .status-upload {
+         background: #fff7ed;
+         color: #9a3412;
+         border: 1px solid #ffedd5;
+      }
+
+      .status-decline {
+         background: #fef2f2;
+         color: #991b1b;
+         border: 1px solid #fee2e2;
+      }
+
+      .val-yes {
+         color: #15803d;
+         font-weight: 600;
+      }
+
+      .val-no {
+         color: #94a3b8;
+      }
+
+      .link-text {
+         color: var(--brand-blue);
+         text-decoration: underline;
+      }
+
+      /* Detail Box */
+      .detail-row {
+         margin-top: -4px;
+         padding-top: 0;
+         border-bottom: none;
+      }
+
+      .detail-box {
+         background: #f8fafc;
+         padding: 6px 10px;
+         border-left: 3px solid var(--border);
+         border-radius: 0 4px 4px 0;
+      }
+
+      /* Signature */
+      .signature-card {
+         background: #f8fafc;
+         border: 1px dashed var(--border);
+         border-radius: 6px;
+         padding: 10px;
+         margin-top: 5px;
+      }
+
+      .signature-header {
+         display: flex;
+         justify-content: space-between;
+         margin-bottom: 6px;
+         font-size: 8px;
+         font-weight: 700;
+         color: var(--secondary);
+         text-transform: uppercase;
+      }
+
+      .signature-img img {
+         max-height: 35px;
+         max-width: 180px;
+      }
+
+      .signature-meta {
+         font-size: 7px;
+         color: var(--text-muted);
+         margin-top: 6px;
+         line-height: 1.3;
+         font-family: monospace;
+      }
+
+      /* Footer */
+      .footer {
+         position: fixed;
+         bottom: 0;
+         left: 0;
+         right: 0;
+         height: 35px;
+         background: white;
+         border-top: 1px solid var(--border);
+         display: flex;
+         align-items: center;
+         justify-content: center;
+         font-size: 8pt;
+         color: #94a3b8;
+         z-index: 1000;
+      }
+
+      .ai-summary-text {
+         font-style: italic;
+         color: #334155;
+         line-height: 1.5;
+      }
+
+      .page-break {
+         page-break-before: always;
+         height: 1px;
+         display: block;
+         border: none;
+         margin: 0;
+      }
+   </style>
+</head>
+
+<body class="compact-mode">
+
+   <!-- Header -->
+   <div class="header">
+      <div class="logo-block">
+         <div class="logo-row">
+            <div class="logo-text">SEMESTER</div>
+            <div class="brand-dots">
+               <div class="dot dot-1"></div>
+               <div class="dot dot-2"></div>
+               <div class="dot dot-3"></div>
+            </div>
+         </div>
+         <div class="logo-slogan">Recruiting Professionals</div>
+      </div>
+      <div class="meta-block">
+         <div class="doc-type">Official Reference Report</div>
+         <div class="doc-ref">ID: REQ-TEST-LONG</div>
+      </div>
+   </div>
+
+   <!-- Dynamic Content Injection -->
+   
+      <div class="section">
+        <div class="section-header">
+           <div class="section-indicator"></div>
+           <div class="section-title">Executive Summary</div>
+        </div>
+        <div class="card">
+           <div class="info-grid">
+             <div class="info-row"><div class="info-cell full-width"><div class="ai-summary-text">The candidate demonstrates strong initiative and reliability. They have consistently met performance targets and are well-regarded by their peers. No significant issues were noted during their tenure.</div></div></div>
+           </div>
+        </div>
+      </div>
+    
+      <div class="section">
+        <div class="section-header">
+           <div class="section-indicator"></div>
+           <div class="section-title">Employment Details</div>
+        </div>
+        <div class="card">
+           <div class="info-grid">
+             
+      <div class="info-row"><div class="info-cell half"><div class="info-label">Job Title</div><div class="info-value">Senior Care Specialist</div></div><div class="info-cell half"><div class="info-label">Dates of Employment</div><div class="info-value">Jan 2020 — Jan 2023</div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Reason for Leaving</div><div class="info-value">End of contract.</div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Disciplinary Action</div><div class="info-value"><span class="val-no">☐ No</span></div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Safeguarding Concerns</div><div class="info-value"><span class="val-no">☐ No</span></div></div></div>
+  
+           </div>
+        </div>
+      </div>
+    
+      <div class="section">
+        <div class="section-header">
+           <div class="section-indicator"></div>
+           <div class="section-title">Ratings & Attributes</div>
+        </div>
+        <div class="card">
+           <div class="info-grid">
+             
+      <div class="info-row"><div class="info-cell half"><div class="info-label">Suitable for Role</div><div class="rating-container"><span class="rating-num">5/5</span><div class="rating-track"><div class="rating-fill" style="width:100%"></div></div><span class="rating-text">Excellent</span></div></div><div class="info-cell half"><div class="info-label">Reliability</div><div class="rating-container"><span class="rating-num">5/5</span><div class="rating-track"><div class="rating-fill" style="width:100%"></div></div><span class="rating-text">Excellent</span></div></div></div>
+      <div class="info-row"><div class="info-cell half"><div class="info-label">Punctuality</div><div class="rating-container"><span class="rating-num">4/5</span><div class="rating-track"><div class="rating-fill" style="width:80%"></div></div><span class="rating-text">Very Good</span></div></div><div class="info-cell half"><div class="info-label">Honesty & Integrity</div><div class="rating-container"><span class="rating-num">5/5</span><div class="rating-track"><div class="rating-fill" style="width:100%"></div></div><span class="rating-text">Excellent</span></div></div></div>
+      <div class="info-row"><div class="info-cell half"><div class="info-label">Attitude to Work</div><div class="rating-container"><span class="rating-num">5/5</span><div class="rating-track"><div class="rating-fill" style="width:100%"></div></div><span class="rating-text">Excellent</span></div></div><div class="info-cell half"><div class="info-label">Initiative</div><div class="rating-container"><span class="rating-num">4/5</span><div class="rating-track"><div class="rating-fill" style="width:80%"></div></div><span class="rating-text">Very Good</span></div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Communication Skills</div><div class="rating-container"><span class="rating-num">5/5</span><div class="rating-track"><div class="rating-fill" style="width:100%"></div></div><span class="rating-text">Excellent</span></div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Performance Comments</div><div class="info-value">Excellent candidate.</div></div></div>
+  
+           </div>
+        </div>
+      </div>
+    
+      <div class="section">
+        <div class="section-header">
+           <div class="section-indicator"></div>
+           <div class="section-title">Safeguarding & Conduct</div>
+        </div>
+        <div class="card">
+           <div class="info-grid">
+             
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Character Reservations</div><div class="info-value"><span class="val-no">☐ No</span></div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Reason NOT to Employ</div><div class="info-value"><span class="val-no">☐ No</span></div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Knowledge of ROA</div><div class="info-value"><span class="val-yes">☑ Yes</span></div></div></div>
+  
+           </div>
+        </div>
+      </div>
+    
+      <div class="section">
+        <div class="section-header">
+           <div class="section-indicator"></div>
+           <div class="section-title">Consent & Declaration</div>
+        </div>
+        <div class="card">
+           <div class="info-grid">
+             
+      <div class="info-row"><div class="info-cell half"><div class="info-label">Referee Name</div><div class="info-value">Pdf Referee Standard Test</div></div><div class="info-cell half"><div class="info-label">Position</div><div class="info-value">Manager</div></div></div>
+      <div class="info-row"><div class="info-cell half"><div class="info-label">Organization</div><div class="info-value">Test Co</div></div><div class="info-cell half"><div class="info-label">Contact</div><div class="info-value">12345 • referee@example.com</div></div></div>
+      <div class="info-row"><div class="info-cell full-width">
+        <div class="signature-card">
+           <div class="signature-header">DIGITALLY SIGNED</div>
+           <div class="signature-img">
+              <!-- Placeholder signature for visual test -->
+              <div style="font-family:cursive; font-size:24px; color:#0052CC">John Doe</div>
+           </div>
+           <div class="signature-meta">
+              Signed: 06/01/2026, 12:00:00<br>
+              IP: 127.0.0.1<br>
+              Device: Mozilla/5.0...
+           </div>
+        </div>
+      </div></div>
+  
+           </div>
+        </div>
+      </div>
+    
+      <div class="section">
+        <div class="section-header">
+           <div class="section-indicator"></div>
+           <div class="section-title">Additional History (Simulated)</div>
+        </div>
+        <div class="card">
+           <div class="info-grid">
+             
+      <div class="info-row"><div class="info-cell half"><div class="info-label">Job Title</div><div class="info-value">Senior Care Specialist</div></div><div class="info-cell half"><div class="info-label">Dates of Employment</div><div class="info-value">Jan 2020 — Jan 2023</div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Reason for Leaving</div><div class="info-value">End of contract.</div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Disciplinary Action</div><div class="info-value"><span class="val-no">☐ No</span></div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Safeguarding Concerns</div><div class="info-value"><span class="val-no">☐ No</span></div></div></div>
+  
+           </div>
+        </div>
+      </div>
+    
+      <div class="section">
+        <div class="section-header">
+           <div class="section-indicator"></div>
+           <div class="section-title">Extended Feedback (Simulated)</div>
+        </div>
+        <div class="card">
+           <div class="info-grid">
+             
+      <div class="info-row"><div class="info-cell half"><div class="info-label">Suitable for Role</div><div class="rating-container"><span class="rating-num">5/5</span><div class="rating-track"><div class="rating-fill" style="width:100%"></div></div><span class="rating-text">Excellent</span></div></div><div class="info-cell half"><div class="info-label">Reliability</div><div class="rating-container"><span class="rating-num">5/5</span><div class="rating-track"><div class="rating-fill" style="width:100%"></div></div><span class="rating-text">Excellent</span></div></div></div>
+      <div class="info-row"><div class="info-cell half"><div class="info-label">Punctuality</div><div class="rating-container"><span class="rating-num">4/5</span><div class="rating-track"><div class="rating-fill" style="width:80%"></div></div><span class="rating-text">Very Good</span></div></div><div class="info-cell half"><div class="info-label">Honesty & Integrity</div><div class="rating-container"><span class="rating-num">5/5</span><div class="rating-track"><div class="rating-fill" style="width:100%"></div></div><span class="rating-text">Excellent</span></div></div></div>
+      <div class="info-row"><div class="info-cell half"><div class="info-label">Attitude to Work</div><div class="rating-container"><span class="rating-num">5/5</span><div class="rating-track"><div class="rating-fill" style="width:100%"></div></div><span class="rating-text">Excellent</span></div></div><div class="info-cell half"><div class="info-label">Initiative</div><div class="rating-container"><span class="rating-num">4/5</span><div class="rating-track"><div class="rating-fill" style="width:80%"></div></div><span class="rating-text">Very Good</span></div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Communication Skills</div><div class="rating-container"><span class="rating-num">5/5</span><div class="rating-track"><div class="rating-fill" style="width:100%"></div></div><span class="rating-text">Excellent</span></div></div></div>
+      <div class="info-row"><div class="info-cell full-width"><div class="info-label">Performance Comments</div><div class="info-value">Excellent candidate.</div></div></div>
+  
+           </div>
+        </div>
+      </div>
+    
+
+   <!-- Fixed Footer -->
+   <div class="footer">
+      Generated by Semester.co.uk • Strictly Confidential • 06 Jan 2026
+   </div>
+
+</body>
+
+</html>

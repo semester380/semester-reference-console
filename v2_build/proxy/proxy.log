@@ -1,0 +1,10 @@
+[dotenv@17.2.3] injecting env (3) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+Server running on http://localhost:3001
+Target GAS URL: Configured
+[PROXY] Action: verifyStaff
+[PROXY] Injected Admin Key for verifyStaff
+[PROXY] Action: getMyRequests
+[PROXY] Injected Admin Key for getMyRequests
+[PROXY] Action: getMyRequests
+[PROXY] Injected Admin Key for getMyRequests
+[PROXY] Action: validateRefereeToken

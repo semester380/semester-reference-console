@@ -116,7 +116,7 @@ export const RequestList: React.FC<RequestListProps> = ({
                             <div className="text-left">
                                 <h4 className="font-semibold text-nano-gray-900 mb-1">Pro tip</h4>
                                 <p className="text-sm text-nano-gray-700">
-                                    Use the Template Builder to create customized reference forms that match your organization's specific requirements.
+                                    Use the Template Builder to create customised reference forms that match your organisation's specific requirements.
                                 </p>
                             </div>
                         </div>
