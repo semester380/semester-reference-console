@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Badge, Loader, Skeleton } from './UI';
+import { Badge, Skeleton } from './UI';
 import type { Request } from '../types';
 
 interface RequestListProps {
