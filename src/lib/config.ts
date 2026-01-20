@@ -3,8 +3,8 @@
  * Centralizes environment variables and provides fallbacks for production reliability
  */
 
-// Current Deployment: @269 - Add manual PDF generation feature
-export const WORKING_GAS_ID = 'AKfycbzEjNrobvoZd6B1ZPrc37zjwegUNzvpCiGV9y8LW_ixcsGWuLjOBQGtn3Jv43sL0i8E'; // @269 - Generate PDF Button
+// Current Deployment: @271 - Add email reference upload feature
+export const WORKING_GAS_ID = 'AKfycbwUapmd4KR06NxmZInUb-sicD-gMqcGKJ4pmL7JjTm0h13hMxfFQRqNYHodyGNmZruF'; // @271 - Email Upload Feature
 
 // Known broken IDs to ignore if they appear in environment variables
 const BROKEN_GAS_IDS = [
