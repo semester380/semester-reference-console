@@ -2083,7 +2083,7 @@ function downloadPdfPayload(requestId) {
     }
     
     // Check if PDF exists (File ID or URL)
-    let fileId = getVal(row, 'PDFFileID');
+    let fileId = getVal(row, 'PdfFileId');
     
     // Fallback: Extract from URL if ID is missing but URL exists
     if (!fileId && getVal(row, 'PdfUrl')) {
