@@ -86,10 +86,20 @@ function analyseSentimentAndAnomalies(requestId, formData) {
  */
 function callGeminiAPI(apiKey, textContent, formData) {
   // 1. Prepare Prompt
+  // 1. Prepare Prompt
+  // Ingest Label Mapping for context
+  const fieldMapping = (typeof getTemplateFieldMapping === 'function') ? getTemplateFieldMapping() : {};
+  const mappingText = Object.entries(fieldMapping)
+     .map(([id, label]) => `${id}: ${label}`)
+     .join('\n');
+
   const prompt = `You are an HR expert analyzing a job reference. Analyze the following reference data and provide:
 1. Sentiment Score (Positive/Neutral/Negative)
 2. A brief summary (max 2 sentences)
 3. Any anomalies or red flags (contradictions, concerning language)
+
+Field Definitions (ID: Label):
+${mappingText}
 
 Reference Context:
 Candidate: ${formData.candidateName || 'Unknown'}

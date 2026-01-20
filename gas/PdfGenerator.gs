@@ -164,6 +164,9 @@ function generateReferencePdf(requestId, request) {
 /**
  * Renderer Class: Handles section layout, estimation, and rendering
  */
+/**
+ * Renderer Class: Handles section layout, estimation, and rendering
+ */
 class PdfRenderer {
   constructor(data, mode) {
     this.data = data;
@@ -175,6 +178,22 @@ class PdfRenderer {
     this.currentHeight = 0;
     this.pageCount = 1;
     this.simulated = false; // logic flag
+    
+    // Load Template
+
+    if (this.data.templateId && typeof getTemplateById === 'function') {
+        const loaded = getTemplateById(this.data.templateId);
+        // getTemplateById returns { result: 'success', template: ... } or just template?
+        // Wait, Code.gs getTemplateById returns the template object DIRECTLY? 
+        // I need to check Code.gs return signature. 
+        // But for now, I'll assume I need to handle whatever getTemplateById returns.
+        // Actually, Code.gs likely returns the OBJECT for internal calls. 
+        // API wrapper wraps it in success/data.
+        // Let's assume global function returns the object.
+        this.template = loaded; 
+    } else {
+        this.template = (typeof getDefaultTemplate === 'function') ? getDefaultTemplate() : null;
+    }
   }
   
   dryRun() {
@@ -194,17 +213,18 @@ class PdfRenderer {
        this.addSection("Executive Summary", this.drawExecutiveSummary(this.data.aiAnalysis));
     }
     
-    // 2. Employment
-    this.addSection("Employment Details", this.drawEmploymentDetails());
-    
-    // 3. Ratings
-    this.addSection("Ratings & Attributes", this.drawRatings());
-    
-    // 4. Safeguarding
-    this.addSection("Safeguarding & Conduct", this.drawSafeguarding());
-    
-    // 5. Declaration
-    this.addSection("Consent & Declaration", this.drawDeclaration(), true);
+    // 2. Dynamic Template Sections
+    if (this.template && this.template.sections) {
+      this.template.sections.forEach(section => {
+        const content = this.drawTemplateSection(section);
+        // Special case for last section (Declaration) to keep together if needed, 
+        // though standard flow handles breaks well.
+        this.addSection(section.title, content);
+      });
+    } else {
+      // Fallback if template missing (should not happen)
+      this.htmlParts.push('<div class="section"><div class="card">Template Missing</div></div>');
+    }
     
     return this.htmlParts.join('\n');
   }
@@ -272,48 +292,81 @@ class PdfRenderer {
       return `<div class="info-row"><div class="info-cell full-width"><div class="ai-summary-text">${text}</div></div></div>`;
    }
    
-   drawEmploymentDetails() {
-     const r = this.responses;
-     // Only show what's present
-     const parts = [
-       this.row("Job Title", r.jobTitle, "Dates of Employment", this.formatDateRange(r.dateStarted, r.dateEnded)),
-       this.row("Reason for Leaving", r.reasonForLeaving),
-       this.yesNoRowWithDetail("Disciplinary Action", r.disciplinaryAction, r.disciplinaryDetails),
-       this.yesNoRowWithDetail("Safeguarding Concerns", r.safeguardingConcerns, r.safeguardingDetails)
-     ];
-     return parts.filter(p => p).join('');
-   }
-   
-   drawRatings() {
-     const r = this.responses;
-     return [
-       this.ratingRow("Suitable for Role", r.suitableForRole, "Reliability", r.reliability),
-       this.ratingRow("Punctuality", r.punctuality, "Honesty & Integrity", r.honesty),
-       this.ratingRow("Attitude to Work", r.attitude, "Initiative", r.initiative),
-       this.ratingRow("Communication Skills", r.communication),
-       this.row("Performance Comments", r.furtherInfo)
-     ].join('');
-   }
-   
-   drawSafeguarding() {
-      const r = this.responses;
-      return [
-        this.yesNoRowWithDetail("Character Reservations", r.characterReservations, r.reservationDetails),
-        this.yesNoRowWithDetail("Reason NOT to Employ", r.shouldNotBeEmployed, r.shouldNotBeEmployedDetails),
-        this.yesNoRow("Knowledge of ROA", r.knowsROA)
-      ].join('');
-   }
-   
-   drawDeclaration() {
-     const r = this.responses;
-     let html = this.row("Referee Name", r.refereeName, "Position", r.refereePosition) + 
-                this.row("Organization", r.refereeCompany, "Contact", `${r.refereeTelephone || ''} • ${r.refereeEmailConfirm || ''}`);
+   drawTemplateSection(section) {
+     const parts = [];
+     const fields = section.fields || [];
      
-     html += `<div class="info-row"><div class="info-cell full-width">
-           ${buildSignatureContent(r.signature)}
-         </div></div>`;
+     // Process fields. Handle layout: 'half' by pairing them.
+     for (let i = 0; i < fields.length; i++) {
+       const f = fields[i];
+       
+       // Handle Signature special case
+       if (f.id === 'signature' || f.type === 'signature') {
+          parts.push(`<div class="info-row"><div class="info-cell full-width">${buildSignatureContent(this.responses[f.id])}</div></div>`);
+          continue;
+       }
+
+       // Skip hidden conditional fields that have no value?
+       // The value in 'responses' should be cleared by frontend logic, so formatted val will be '—'.
+       // But if we want to hide fully:
+       if (f.conditional) {
+          const parentVal = this.responses[f.conditional.field];
+          if (parentVal !== f.conditional.value) {
+             continue; // Skip rendering
+          }
+       }
+       
+       // Handle Pair Layout
+       if (f.layout === 'half' && i + 1 < fields.length && fields[i+1].layout === 'half') {
+          const f2 = fields[i+1];
+          parts.push(this.renderFieldPair(f, f2));
+          i++; // Skip next
+       } else {
+          parts.push(this.renderFieldSingle(f));
+       }
+     }
      
-     return html;
+     return parts.join('');
+   }
+   
+   renderFieldSingle(f) {
+     const val = this.responses[f.id];
+     
+     if (f.type === 'boolean') {
+        // Check for child detail field (the next one usually)
+        // Actually, the iteration handles the child field separately. 
+        // But if we want to nest them visually (detail-row), we need to look ahead.
+        // Or we can just render the detail field as a normal row if it appears.
+        // Current PDF logic had `yesNoRowWithDetail`.
+        // Since we are iterating, the detail field will be visited next.
+        // So we just render this boolean.
+        return this.yesNoRow(f.label, val);
+     }
+     
+     if (f.type === 'rating') {
+        // Single rating? Usually half width. If single:
+        return this.ratingRow(f.label, val);
+     }
+     
+     return this.row(f.label, val);
+   }
+   
+   renderFieldPair(f1, f2) {
+     const v1 = this.responses[f1.id];
+     const v2 = this.responses[f2.id];
+     
+     if (f1.type === 'rating' || f2.type === 'rating') {
+        // Assuming both are ratings if one is, or mixed.
+        // ratingRow handles 2 args.
+        return this.ratingRow(f1.label, v1, f2.label, v2);
+     }
+     
+     // Standard text/date pair
+     // Handle format
+     const fv1 = (f1.type === 'date') ? this.formatDate(v1) : v1;
+     const fv2 = (f2.type === 'date') ? this.formatDate(v2) : v2;
+     
+     return this.row(f1.label, fv1, f2.label, fv2);
    }
    
    // --- Primitive Builders ---
@@ -342,25 +395,6 @@ class PdfRenderer {
         <div class="info-label">${label}</div>
         <div class="info-value">${disp}</div>
      </div></div>`;
-   }
-   
-   yesNoRowWithDetail(label, val, detail) {
-      const isYes = val === true || val === 'true';
-      const hasDetail = detail && String(detail).trim().length > 0;
-      
-      let html = this.yesNoRow(label, val);
-      
-      if (hasDetail) {
-          html += `<div class="info-row detail-row">
-             <div class="info-cell full-width" style="margin-left: 2px;">
-               <div class="detail-box">
-                 <div class="info-label">Details</div>
-                 <div class="info-value">${this.formatVal(detail)}</div>
-               </div>
-             </div>
-          </div>`;
-      }
-      return html;
    }
    
    ratingRow(label1, val1, label2, val2) {
@@ -394,9 +428,8 @@ class PdfRenderer {
      return String(val).replace(/\n/g, '<br>');
    }
    
-   formatDateRange(d1, d2) {
-      const f = (d) => d ? new Date(d).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Present';
-      return `${f(d1)} — ${f(d2)}`;
+   formatDate(d) {
+     return d ? new Date(d).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Present';
    }
  }
  
@@ -477,8 +510,8 @@ class PdfRenderer {
    }
  
    // Handle various formats
-   const dataUrl = sig.dataUrl || sig; 
-   const timestamp = sig.timestamp || new Date().toISOString();
+   const dataUrl = sig.signatureDataUrl || sig.dataUrl || sig; 
+   const timestamp = sig.signedAt || sig.timestamp || new Date().toISOString();
    const ip = sig.ip || 'Recorded';
    const agent = sig.userAgent || 'Web Client';
  

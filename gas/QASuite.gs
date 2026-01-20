@@ -139,7 +139,7 @@ function runQA() {
     };
     
     // We need to pass the token as a parameter
-    const submitResult = submitReference(newRefereeToken, formData, 'John The Referee');
+    const submitResult = submitReference(newRefereeToken, formData, 'form');
     
     if (submitResult.success) {
        log('5. Submit Reference', true, 'Reference submitted');
@@ -201,4 +201,299 @@ function runQA() {
     log('QA-FATAL', false, e.toString() + ' ' + e.stack);
     return { success: false, log: results, error: e.toString() };
   }
+}
+
+/**
+ * Verify Template Alignment and Validation Logic
+ */
+function testTemplateAlignment() {
+  console.log("Starting Template Alignment Test...");
+  const template = getDefaultTemplate();
+  
+  // 1. Verify Canonical Fields Exist
+  const expectedInfo = [
+    "dateStarted", "dateEnded", "jobTitle", "reasonForLeaving",
+    "safeguardingConcerns", "safeguardingDetails",
+    "disciplinaryAction", "disciplinaryDetails",
+    "suitableForRole", "punctuality", "attitude", "reliability", "honesty", "initiative", "communication",
+    "characterReservations", "reservationDetails", "shouldNotBeEmployed", "shouldNotBeEmployedDetails",
+    "knowsROA", "consentToShare"
+  ];
+  
+  // Flatten sections
+  const flatFields = [];
+  template.sections.forEach(s => flatFields.push(...s.fields));
+  const fieldIds = flatFields.map(f => f.id);
+  
+  const missing = expectedInfo.filter(id => !fieldIds.includes(id));
+  if (missing.length > 0) {
+    throw new Error("Missing Canonical Fields: " + missing.join(", "));
+  }
+  console.log("✓ All Canonical Fields Present");
+  
+  // 2. Test Validation Logic
+  
+  // Case A: Missing Required Field
+  try {
+     validateResponses(template, { dateStarted: "2023-01-01" }); // Missing others
+     throw new Error("Validation failed to catch missing fields");
+  } catch (e) {
+     if (!e.toString().includes("Missing required field")) throw e;
+     console.log("✓ Validation caught missing required fields");
+  }
+  
+  // Case B: Conditional Logic (Hidden) - Should Pass if parent is false and child missing
+  try {
+     validateResponses(template, {
+        dateStarted: "2023-01-01", dateEnded: "2024-01-01", jobTitle: "Role", reasonForLeaving: "Reason",
+        safeguardingConcerns: false, // Child 'safeguardingDetails' is missing but should be ignored
+        disciplinaryAction: false,
+        suitableForRole: 5, punctuality: 5, attitude: 5, reliability: 5, honesty: 5, initiative: 5, communication: 5,
+        characterReservations: false,
+        shouldNotBeEmployed: false,
+        consentToShare: true,
+        refereeName: "Test", refereePosition: "Pos", refereeCompany: "Co", refereeTelephone: "123", refereeEmailConfirm: "a@b.com", signature: "sig"
+     });
+     console.log("✓ Validation passed for hidden conditional fields");
+  } catch (e) {
+     throw new Error("Validation failed incorrectly for hidden fields: " + e);
+  }
+  
+  // Case C: Conditional Logic (Shown) - Should Fail if parent is true and child missing
+  try {
+     validateResponses(template, {
+        dateStarted: "2023-01-01", dateEnded: "2024-01-01", jobTitle: "Role", reasonForLeaving: "Reason",
+        safeguardingConcerns: true, // Child 'safeguardingDetails' is REQUIRED now
+        disciplinaryAction: false,
+        suitableForRole: 5, punctuality: 5, attitude: 5, reliability: 5, honesty: 5, initiative: 5, communication: 5,
+        characterReservations: false,
+        shouldNotBeEmployed: false,
+        consentToShare: true,
+        refereeName: "Test", refereePosition: "Pos", refereeCompany: "Co", refereeTelephone: "123", refereeEmailConfirm: "a@b.com", signature: "sig"
+     });
+     throw new Error("Validation failed to catch missing conditional field");
+  } catch (e) {
+     if (!e.toString().includes("Missing required field")) throw e; 
+     console.log("✓ Validation caught missing conditional field");
+  }
+  
+  return "Test Passed";
+}
+
+/**
+ * Verify ID-based Mapping and Template-Driven PDF Generation
+ */
+function testIdBasedMapping() {
+  console.log("Starting ID-Based Mapping Test...");
+  
+  // 1. Verify Helper
+  const mapping = getTemplateFieldMapping();
+  if (mapping['dateStarted'] !== 'Date Started') {
+     throw new Error("Mapping failure: dateStarted not found");
+  }
+  console.log("✓ Helper getTemplateFieldMapping() works");
+
+  // 2. Verify Dynamic PDF Rendering
+  // Strategy: Mock the template in memory, change a label, and see if PDF renders it.
+  
+  const originalTemplate = getDefaultTemplate();
+  const originalLabel = originalTemplate.sections[0].fields[0].label;
+  
+  try {
+    // Modify label temporarily
+    const testLabel = "DYNAMIC_LABEL_TEST_123";
+    originalTemplate.sections[0].fields[0].label = testLabel;
+    
+    // Mock Data
+    const mockRequest = { 
+       candidateName: "Test", refereeName: "Ref", 
+       responses: { dateStarted: "2020-01-01" }, // Field 0 is dateStarted
+       aiAnalysis: {}
+    };
+    
+    // Instantiate Renderer (Standard Global Class)
+    const renderer = new PdfRenderer(mockRequest, 'normal');
+    renderer.dryRun(); // initializes template
+    const html = renderer.render();
+    
+    if (html.includes(testLabel)) {
+       console.log("✓ PDF Generator is using dynamic template labels");
+    } else {
+       throw new Error("PDF Generator is NOT using dynamic labels (Hardcoded strings found?)");
+    }
+    
+  } catch (e) {
+    throw e;
+  } finally {
+    // Restore
+    originalTemplate.sections[0].fields[0].label = originalLabel;
+  }
+  
+  return "Test Passed";
+}
+
+/**
+ * Verify Data Isolation Rules (Row-Level Security)
+ */
+function testDataIsolation() {
+  console.log("Starting Data Isolation Test...");
+  
+  // 1. Test Admin (Rob) - Should see all
+  const adminRes = getMyRequests(true, 'rob@semester.co.uk');
+  console.log(`Admin (Rob) sees ${adminRes.data.length} requests.`);
+  
+  // 2. Test Team (Sam) - Should see Sam + Shaun
+  const samRes = getMyRequests(true, 'sam@semester.co.uk');
+  console.log(`Team (Sam) sees ${samRes.data.length} requests.`);
+  
+  // 3. Test Individual (Theresa)
+  const theresaRes = getMyRequests(true, 'theresa@semester.co.uk');
+  console.log(`Individual (Theresa) sees ${theresaRes.data.length} requests.`);
+  
+  if (theresaRes.data.length > adminRes.data.length) {
+     throw new Error("Theresa sees more than Admin! Security Failure.");
+  }
+  
+  return { success: true, counts: { admin: adminRes.data.length, team: samRes.data.length, staff: theresaRes.data.length } };
+}
+
+function testTemplateAlignmentCfDfeGuidelines() {
+  console.log("Testing C&F Template alignment...");
+  
+  // 1. Fetch Template
+  const template = getTemplateById('cf-dfe-guidelines');
+  if (!template) throw new Error("Template 'cf-dfe-guidelines' not found. Run migration.");
+  
+  // 2. Validate Structure (Frontend view)
+  const templatesRes = getTemplates();
+  const templates = templatesRes.data; // access data property
+  if (!templates) throw new Error("Templates data missing");
+  const flattened = templates.find(t => t.templateId === 'cf-dfe-guidelines').structureJSON;
+  
+  if (!Array.isArray(flattened)) {
+     console.log("Frontend structureJSON type: " + typeof flattened);
+     throw new Error("Frontend structureJSON is not an array");
+  }
+  if (flattened.length < 10) throw new Error("Template seems empty");
+  
+  // 3. Validate Sections (Backend view)
+  if (!template.sections) throw new Error("Backend template missing 'sections' property");
+  
+  // 4. Validate Specific Fields
+  const areaField = flattened.find(f => f.id === 'practiseAreas');
+  if (!areaField || areaField.type !== 'checkbox-group') throw new Error("Missing practiseAreas checkbox-group");
+  
+  const compField = flattened.find(f => f.id === 'compKnowledge');
+  if (!compField || compField.type !== 'rating' || !compField.options) throw new Error("Missing/Invalid competency field");
+  
+  // 5. Test Validation Logic
+  // Mock Responses
+  const responses = {
+     candidateName: "Test",
+     consentToShare: true,
+     declarationAuth: false,
+     // Missing required fields...
+  };
+  
+  let errorCaught = false;
+  try {
+     validateResponses(template, responses);
+  } catch (e) {
+     errorCaught = true;
+      console.log("Caught expected validation error: " + e.message);
+  }
+  
+  if (!errorCaught) throw new Error("Validation failed to catch missing fields");
+  
+  // Add required fields to pass basic check
+  flattened.forEach(f => {
+     if (f.required && !f.conditional) {
+        if (f.type === 'checkbox-group') responses[f.id] = ['Option1'];
+        else if (f.type === 'boolean') responses[f.id] = true;
+        else if (f.type === 'rating') responses[f.id] = (f.options ? f.options[0] : 1);
+        else if (f.type === 'date') responses[f.id] = '2022-01-01';
+        else if (f.type === 'signature') responses[f.id] = { typedName: 'X', signatureDataUrl: 'data:image/png...', signedAt: '2022' };
+        else if (f.type === 'email') responses[f.id] = 'test@example.com';
+        else responses[f.id] = 'Test';
+     }
+  });
+  
+  // Test Checkbox Group logic overrides
+  responses['declarationAuth'] = false; // logic check - should hide declarationOrg
+  
+  // Clear conditional dependency
+  responses['practiseAreas'] = []; // Empty array -> fail required?
+  try {
+     validateResponses(template, responses);
+  } catch (e) {
+      if (e.message.includes('Area of practise')) console.log("Caught empty checkbox group");
+      else throw e;
+  }
+  
+  return { success: true };
+}
+
+/**
+ * Test Evaluation Form Template
+ */
+function testTemplateAlignmentEvaluationForm() {
+   console.log("Testing Evaluation Form Template alignment...");
+   
+   // 1. Fetch
+   const template = getTemplateById('evaluation-form');
+   if (!template) throw new Error("Template 'evaluation-form' not found. Run migration.");
+   
+   // 2. Validate Frontend Structure
+   const templatesRes = getTemplates();
+   const flattened = templatesRes.data.find(t => t.templateId === 'evaluation-form').structureJSON;
+   if (!Array.isArray(flattened)) throw new Error("Frontend structureJSON is not an array");
+   
+   // 3. Check Fields
+   if (!flattened.find(f => f.id === 'ratingAttendance')) throw new Error("Missing ratingAttendance");
+   if (!flattened.find(f => f.id === 'safeguardingDetails')) throw new Error("Missing safeguardingDetails");
+   
+   // 4. Test Validation Logic
+   const responses = {}; // Empty
+   let errorCaught = false;
+   try {
+     validateResponses(template, responses);
+   } catch (e) {
+     errorCaught = true;
+     console.log("Caught expected missing fields error: " + e.message);
+   }
+   if (!errorCaught) throw new Error("Validation failed to catch missing fields");
+   
+   // 5. Test Conditional Logic
+   // Fill all required
+   flattened.forEach(f => {
+     if (f.required && !f.conditional) {
+        if (f.type === 'date') responses[f.id] = '2025-01-01';
+        else if (f.type === 'boolean') responses[f.id] = false; // Default false
+        else if (f.type === 'rating') responses[f.id] = f.options[0];
+        else if (f.type === 'email') responses[f.id] = 'test@test.com';
+        else if (f.type === 'signature') responses[f.id] = { typedName: 'Test', signatureDataUrl: 'data:..', signedAt: '2025' };
+        else responses[f.id] = 'Test';
+     }
+   });
+   
+   // Set Safeguarding = true -> Details becomes required
+   responses['safeguardingConcerns'] = true;
+   // Ensure details is EMPTY
+   delete responses['safeguardingDetails'];
+   
+   errorCaught = false;
+   try {
+     validateResponses(template, responses);
+   } catch (e) {
+     // Error message includes label "If yes, please provide details"
+     if (e.message.includes('please provide details')) {
+        errorCaught = true;
+        console.log("Caught expected conditional error: " + e.message);
+     } else {
+        console.log("Caught UNEXPECTED error: " + e.message);
+     }
+   }
+   if (!errorCaught) throw new Error("Validation failed to catch conditional safeguardingDetails");
+   
+   return { success: true };
 }

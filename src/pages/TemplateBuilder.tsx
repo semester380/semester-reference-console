@@ -57,7 +57,30 @@ const TemplateBuilder: React.FC = () => {
         if (isDirty && !window.confirm('You have unsaved changes. Discard them?')) return;
 
         setTemplateName(template.name);
-        setFields(template.structureJSON || []);
+
+        // DEFENSIVE: Flatten structureJSON if it's wrapped in sections
+        let structure = template.structureJSON || [];
+
+        // Check if structureJSON is actually an object with a sections property
+        if (!Array.isArray(structure) && structure && typeof structure === 'object' && 'sections' in structure) {
+            console.warn('Template has nested sections, flattening...', structure);
+            const flattened: TemplateField[] = [];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (structure as any).sections?.forEach((section: any) => {
+                if (section.fields && Array.isArray(section.fields)) {
+                    flattened.push(...section.fields);
+                }
+            });
+            structure = flattened;
+        }
+
+        // Final safety check
+        if (!Array.isArray(structure)) {
+            console.error('Invalid template structure after flattening:', structure);
+            structure = [];
+        }
+
+        setFields(structure);
         setSelectedTemplateId(template.templateId);
         setIsDirty(false);
         setSaveStatus('idle');

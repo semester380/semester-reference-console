@@ -5,3 +5,4 @@ dist
 .env.local
 .clasp.json
 .claspignore
+.vercel

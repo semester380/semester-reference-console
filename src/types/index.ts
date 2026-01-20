@@ -4,7 +4,7 @@ export interface Request {
     candidateEmail: string;
     refereeName: string;
     refereeEmail: string;
-    status: 'Pending_Consent' | 'Consent_Given' | 'Sent' | 'Viewed' | 'Completed' | 'Sealed' | 'Flagged' | 'EXPIRED' | 'CONSENT_DECLINED' | 'PENDING_CONSENT';
+    status: 'Pending_Consent' | 'Consent_Given' | 'Sent' | 'Viewed' | 'Completed' | 'Sealed' | 'Flagged' | 'EXPIRED' | 'CONSENT_DECLINED' | 'PENDING_CONSENT' | 'CONSENT_GIVEN';
     consentStatus: boolean | string;
     consentTimestamp?: string;
     sentimentScore?: string;
@@ -50,12 +50,17 @@ export interface Template {
 
 export interface TemplateField {
     id: string;
-    type: 'text' | 'textarea' | 'rating' | 'boolean' | 'date' | 'daterange' | 'signature' | 'email';
+    type: 'text' | 'textarea' | 'rating' | 'boolean' | 'date' | 'daterange' | 'signature' | 'email' | 'checkbox-group';
     label: string;
     description?: string; // Optional helper text for the question
     required: boolean;
     layout?: 'full' | 'half'; // Field width for desktop layouts
-    options?: unknown;
+    options?: string[]; // Options for select/rating/checkbox-group
+    conditional?: {
+        field: string;
+        value: unknown; // Can be array for "includes" logic
+        required?: boolean;
+    };
 }
 
 

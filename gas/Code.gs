@@ -57,16 +57,34 @@ const DEFAULT_TEMPLATE = {
         { id: "dateStarted", label: "Date Started", type: "date", required: true, layout: "half" },
         { id: "dateEnded", label: "Date Ended", type: "date", required: true, layout: "half" },
         { id: "jobTitle", label: "Job Title", type: "text", required: true },
-        { id: "reasonForLeaving", label: "Reason for Leaving", type: "textarea", required: true },
+        { id: "reasonForLeaving", label: "Reason for Leaving", type: "textarea", required: true }
+      ]
+    },
+    {
+      id: "safeguarding",
+      title: "Safeguarding & Conduct",
+      fields: [
         { id: "safeguardingConcerns", label: "Were there any safeguarding concerns during employment?", type: "boolean", required: true },
-        { id: "safeguardingDetails", label: "If yes, please provide details", type: "textarea", required: false },
+        { 
+          id: "safeguardingDetails", 
+          label: "If yes, please provide details", 
+          type: "textarea", 
+          required: false,
+          conditional: { field: "safeguardingConcerns", value: true, required: true }
+        },
         { id: "disciplinaryAction", label: "Was the candidate subject to any disciplinary action?", type: "boolean", required: true },
-        { id: "disciplinaryDetails", label: "If yes, please provide details", type: "textarea", required: false }
+        { 
+          id: "disciplinaryDetails", 
+          label: "If yes, please provide details", 
+          type: "textarea", 
+          required: false,
+          conditional: { field: "disciplinaryAction", value: true, required: true }
+        }
       ]
     },
     {
       id: "ratings",
-      title: "Ratings & Attributes",
+      title: "Performance Ratings",
       description: "Please rate the candidate on the following attributes:",
       fields: [
         { id: "suitableForRole", label: "Suitable for Role", type: "rating", required: true, layout: "half" },
@@ -80,26 +98,38 @@ const DEFAULT_TEMPLATE = {
       ]
     },
     {
-      id: "safeguarding",
-      title: "Safeguarding & Professional Judgement",
+      id: "suitability",
+      title: "Suitability & Risk",
       fields: [
         { id: "characterReservations", label: "Do you have any reservations about the candidate's character or conduct?", type: "boolean", required: true },
-        { id: "reservationDetails", label: "If yes, please provide details", type: "textarea", required: false },
+        { 
+          id: "reservationDetails", 
+          label: "If yes, please provide details", 
+          type: "textarea", 
+          required: false,
+          conditional: { field: "characterReservations", value: true, required: true }
+        },
         { id: "shouldNotBeEmployed", label: "Is there any reason the candidate should NOT be employed to work with vulnerable persons?", type: "boolean", required: true },
-        { id: "shouldNotBeEmployedDetails", label: "If yes, please explain", type: "textarea", required: false },
-        { id: "knowsROA", label: "Does the candidate have knowledge of the Rehabilitation of Offenders Act?", type: "boolean", required: false }
+        { 
+          id: "shouldNotBeEmployedDetails", 
+          label: "If yes, please explain", 
+          type: "textarea", 
+          required: false,
+          conditional: { field: "shouldNotBeEmployed", value: true, required: true }
+        }
       ]
     },
     {
-      id: "consent",
-      title: "Consent to Share",
+      id: "legal",
+      title: "Legal & Consent",
       fields: [
+        { id: "knowsROA", label: "Does the candidate have knowledge of the Rehabilitation of Offenders Act?", type: "boolean", required: false },
         { id: "consentToShare", label: "Are you happy for this reference to be shared with third-party clients?", type: "boolean", required: true }
       ]
     },
     {
       id: "declaration",
-      title: "Declaration",
+      title: "Referee Details",
       description: "Please confirm your details below:",
       fields: [
         { id: "refereeName", label: "Your Full Name", type: "text", required: true, layout: "half" },
@@ -120,73 +150,7 @@ function getDefaultTemplate() {
   return DEFAULT_TEMPLATE;
 }
 
-/**
- * Get templates with auto-healing and debug info
- */
-function getTemplates() {
-  const ss = getDatabaseSpreadsheet();
-  let sheet = ss.getSheetByName(SHEET_TEMPLATES);
-  
-  // Auto-heal if missing sheet
-  if (!sheet) {
-     console.log("Sheet missing, initializing...");
-     initializeDatabase();
-     SpreadsheetApp.flush(); // Force write
-     sheet = ss.getSheetByName(SHEET_TEMPLATES);
-  }
 
-  // Auto-heal if empty (just header)
-  if (sheet.getLastRow() <= 1) {
-     console.log("Sheet empty, initializing...");
-     initializeDatabase();
-     SpreadsheetApp.flush(); // Force write
-  }
-  
-  const data = sheet.getDataRange().getValues();
-  const templates = [];
-  let parseErrors = 0;
-  
-  for (let i = 1; i < data.length; i++) {
-    try {
-      const jsonStr = data[i][2];
-      if (!jsonStr || jsonStr === '') {
-          parseErrors++;
-          continue;
-      }
-      
-      let structure = [];
-      try {
-        structure = JSON.parse(jsonStr);
-      } catch (jsonErr) {
-        console.error("JSON Parse Error Row " + (i+1) + ": " + jsonErr);
-        // Fallback: If it's the default template, recover it? 
-        // For now just count error
-        parseErrors++;
-        continue;
-      }
-
-      templates.push({
-        templateId: data[i][0],
-        name: data[i][1],
-        structureJSON: structure,
-        active: true
-      });
-    } catch (e) {
-      console.error("General Row Error " + (i+1) + ": " + e);
-      parseErrors++;
-    }
-  }
-  
-  return { 
-      success: true, 
-      data: templates, 
-      meta: { 
-          totalRows: data.length, 
-          parseErrors: parseErrors,
-          sheetName: sheet.getName()
-      } 
-  };
-}
 
 
 /**
@@ -315,12 +279,7 @@ function handleApiRequest(e) {
     const publicEndpoints = [
       'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
       'submitReference', 'uploadReferenceDocument', 'getTemplates', 
-      'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
-      'submitReference', 'uploadReferenceDocument', 'getTemplates', 
-      'healthCheck', 'processCandidateConsent', 'validateRefereeToken', 
-      'submitReference', 'uploadReferenceDocument', 'getTemplates', 
-      'authorizeConsent', 'authoriseConsent', 'getDefaultTemplate', 'inspectTemplates',
-      'verifyStaff', 'testGeminiAPI', 'testAIAnalysisOnRequest', 'batchAnalyzeReferences', 'runCompleteE2ETest', 'runQA', 'resetTemplates', 'verifyPdf', 'diagnoseConfig', 'runDebugSeal'
+      'authorizeConsent', 'authoriseConsent', 'getDefaultTemplate', 'verifyStaff'
     ];
     
     const adminOnlyEndpoints = [
@@ -328,7 +287,8 @@ function handleApiRequest(e) {
       'runSmartChase', 'runAnalysis', 'analyseReference', 'listStaff', 'addStaff', 
       'updateStaff', 'deactivateStaff', 
       'initializeDatabase', 'fixTemplateStructure', 'seedEmploymentTemplate', 'sealRequest', 'fixPermissions', 'backfillTokens',
-      'saveTemplate', 'deleteTemplate'
+      'saveTemplate', 'deleteTemplate', 'clearAllTestData', 'testTemplateAlignment', 'forceCanonicalTemplateUpdate',
+      'verifyIdMapping', 'verifyDataIsolation', 'forceCanonicalTemplateUpdateCfDfeGuidelines'
     ];
     
     const staffEndpoints = [
@@ -417,6 +377,39 @@ function handleApiRequest(e) {
         if (!isAdminRequest(e)) throw new Error('Unauthorized');
         result = runQA();
         break;
+      case 'testTemplateAlignment':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
+        result = testTemplateAlignment();
+        break;
+      case 'forceCanonicalTemplateUpdate':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
+        result = forceCanonicalTemplateUpdate();
+        break;
+      case 'verifyIdMapping':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
+        result = testIdBasedMapping();
+        break;
+      case 'verifyDataIsolation':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
+        result = testDataIsolation();
+        break;
+      case 'forceCanonicalTemplateUpdateCfDfeGuidelines':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
+        result = forceCanonicalTemplateUpdateCfDfeGuidelines();
+        break;
+      case 'testTemplateAlignmentCfDfeGuidelines':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
+        result = testTemplateAlignmentCfDfeGuidelines();
+        break;
+      case 'forceCanonicalTemplateUpdateEvaluationForm':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
+        result = forceCanonicalTemplateUpdateEvaluationForm();
+        break;
+      case 'testTemplateAlignmentEvaluationForm':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
+        result = testTemplateAlignmentEvaluationForm();
+        break;
+
       case 'verifyPdf':
         // Exposed for Audit Verification
         // In verifyPdfEndToEnd defined in VerifyPdfFlow.gs
@@ -428,10 +421,12 @@ function handleApiRequest(e) {
         result = initiateRequest(payload, staff);
         break;
       case 'getMyRequests':
-        result = getMyRequests(payload.includeArchived || false);
+        const requester = staff ? staff.email : Session.getActiveUser().getEmail();
+        result = getMyRequests(payload.includeArchived || false, requester);
         break;
       case 'getRequest':
-        result = getRequest(payload.requestId);
+        const requestUser = staff ? staff.email : Session.getActiveUser().getEmail();
+        result = getRequest(payload.requestId, requestUser);
         break;
       case 'getAuditTrail':
         // Return array directly for legacy compatibility (Legacy frontend expects Array, not Object)
@@ -448,23 +443,8 @@ function handleApiRequest(e) {
         // Test Gemini API connection
         result = testGeminiAPI();
         break;
-      case 'runDebugSeal':
-        const debugStaff = { email: 'rob@semester.co.uk', name: 'Rob (Debug)', roles: ['Admin'] };
-        result = sealRequest(payload.requestId, debugStaff);
-        break;
-      case 'forceSetAdminKey':
-        const expected = 'uO4KpB7Zx9qL1Fs8cYp3rN5wD2mH6vQ0TgE9jS4aB8kR1nC5uL7zX2pY6';
-        PropertiesService.getScriptProperties().setProperty('ADMIN_API_KEY', expected);
-        result = { success: true, message: 'Admin Key Forced Set' };
-        break;
-      case 'testAIAnalysisOnRequest':
-        // Test AI analysis on specific request
-        result = testAIAnalysisOnRequest(payload.requestId || '695a06e6-1261-4112-b8d4-9b2f6a3ad18e');
-        break;
-      case 'batchAnalyzeReferences':
-        // Run AI analysis on all completed references
-        result = batchAnalyzeReferences();
-        break;
+
+
 
       // Admin Only
       case 'initializeDatabase':
@@ -492,6 +472,9 @@ function handleApiRequest(e) {
       case 'deleteTemplate':
         result = deleteTemplate(payload.templateId, staff);
         break;
+      case 'clearAllTestData':
+        result = clearAllTestData();
+        break;
       case 'seedEmploymentTemplate':
         result = seedEmploymentTemplate();
         break;
@@ -507,6 +490,11 @@ function handleApiRequest(e) {
       case 'runSmartChase':
         result = runSmartChase(staff);
         break;
+      case 'setupTriggers':
+        if (!isAdminRequest(e)) throw new Error('Unauthorized');
+        result = setupTriggers();
+        break;
+
       case 'runAnalysis': // Legacy
       case 'analyseReference':
         result = analyseReference(payload.requestId, staff);
@@ -621,6 +609,44 @@ function testConsentLogic(token) {
   }
   
   return { success: true, log: log };
+}
+
+/**
+ * Force update the C&F - DFE Guidelines template
+ */
+function forceCanonicalTemplateUpdateCfDfeGuidelines() {
+  const ss = getDatabaseSpreadsheet();
+  const sheet = ss.getSheetByName('Template_Definitions');
+  
+  if (!sheet) throw new Error("Missing Template_Definitions sheet");
+  
+  const template = getCfDfeTemplate();
+  
+  const data = sheet.getDataRange().getValues();
+  let rowIndex = -1;
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === template.templateId) {
+      rowIndex = i;
+      break;
+    }
+  }
+  
+  const rowData = [
+    template.templateId,
+    template.name,
+    JSON.stringify({ sections: template.sections }), 
+    true 
+  ];
+  
+  if (rowIndex === -1) {
+    sheet.appendRow(rowData);
+  } else {
+    console.log('Updating existing C&F template');
+    sheet.getRange(rowIndex + 1, 1, 1, 4).setValues([rowData]);
+  }
+  
+  return { success: true, message: "Template Updated: " + template.templateId };
 }
 
 // --- Database & Auditing ---
@@ -836,7 +862,19 @@ function initiateRequest(requestData, staff) {
     const staffId = staff ? staff.staffId : '';
     const staffName = staff ? staff.name : 'System';
     
-    // 3. Create Record
+    // Check if staff is bypassing candidate consent
+    const skipCandidateConsent = requestData.skipCandidateConsent === true;
+    
+    // 3. Generate Referee Token (immediately if skipping consent, or later after approval)
+    let refereeToken = '';
+    let refereeTokenExpiry = '';
+    
+    if (skipCandidateConsent) {
+      refereeToken = Utilities.getUuid();
+      refereeTokenExpiry = new Date(now.getTime() + (14 * 24 * 60 * 60 * 1000)); // 14 days
+    }
+    
+    // 4. Create Record
     // Schema: RequestID, CandidateName, CandidateEmail, RefereeName, RefereeEmail, RequesterEmail, Status, ConsentStatus, ConsentTimestamp, ConsentToken, ConsentTokenExpiry, RefereeToken, RefereeTokenExpiry, TemplateID, CreatedAt, UpdatedAt, Method, DeclineReason, DeclineDetails, PdfFileId, PdfUrl, UploadedFileUrl, FileName, LastChaseDate, Archived, CreatedByStaffId, LastUpdatedByStaffId
     const rowData = [
       requestId,
@@ -845,13 +883,13 @@ function initiateRequest(requestData, staff) {
       requestData.refereeName,
       requestData.refereeEmail,
       requesterEmail,
-      'PENDING_CONSENT', // Status
-      'PENDING',         // ConsentStatus
-      '',                // ConsentTimestamp
+      skipCandidateConsent ? 'CONSENT_GIVEN' : 'PENDING_CONSENT', // Status
+      skipCandidateConsent ? 'STAFF_OVERRIDE' : 'PENDING',        // ConsentStatus
+      skipCandidateConsent ? now : '',                            // ConsentTimestamp
       consentToken,
       expiry,
-      '',                // RefereeToken (generated after consent)
-      '',                // RefereeTokenExpiry
+      refereeToken,              // RefereeToken (populated if staff override)
+      refereeTokenExpiry,        // RefereeTokenExpiry
       requestData.templateId || 'default',
       now,
       now,
@@ -863,20 +901,43 @@ function initiateRequest(requestData, staff) {
     
     requestsSheet.appendRow(rowData);
     
-    // 4. Log Audit
-    logAudit(requestId, 'Staff', staffId, staffName, 'REQUEST_INITIATED', { 
-      candidate: requestData.candidateEmail,
-      referee: requestData.refereeEmail 
-    });
+    // 5. Log Audit
+    if (skipCandidateConsent) {
+      logAudit(requestId, 'Staff', staffId, staffName, 'REQUEST_INITIATED_STAFF_OVERRIDE', { 
+        candidate: requestData.candidateEmail,
+        referee: requestData.refereeEmail,
+        note: 'Staff bypassed candidate consent for urgent request'
+      });
+    } else {
+      logAudit(requestId, 'Staff', staffId, staffName, 'REQUEST_INITIATED', { 
+        candidate: requestData.candidateEmail,
+        referee: requestData.refereeEmail 
+      });
+    }
     
-    // 5. Send Authorisation Email
-    sendAuthorisationEmail(requestData.candidateEmail, requestData.candidateName, consentToken, requestData.refereeName);
+    // 6. Send Appropriate Email
+    if (skipCandidateConsent) {
+      // Skip candidate email and send directly to referee
+      try {
+        sendRefereeInviteEmail(requestData.refereeEmail, requestData.refereeName, requestData.candidateName, refereeToken, requesterEmail);
+        logAudit(requestId, 'System', 'EMAIL', 'Email System', 'REFEREE_INVITE_SENT', { 
+          referee: requestData.refereeEmail,
+          staffOverride: true
+        });
+      } catch (emailErr) {
+        console.error("Failed to send referee invite: " + emailErr.toString());
+        // Continue anyway - request is created
+      }
+    } else {
+      // Standard flow - send candidate authorization email
+      sendAuthorisationEmail(requestData.candidateEmail, requestData.candidateName, consentToken, requestData.refereeName, requesterEmail);
+    }
     
     return { success: true, requestId: requestId };
     
   } catch (e) {
     console.error("initiateRequest Error: " + e.toString());
-    sendErrorAlert('initiateRequest', e); // Use the new central alert (which now exists)
+    sendErrorAlert('initiateRequest', e);
     return { success: false, error: e.toString() };
   }
 }
@@ -890,7 +951,7 @@ function initiateRequest(requestData, staff) {
  * Send authorization email to candidate
  */
 
-function sendAuthorisationEmail(email, name, token, refereeName) {
+function sendAuthorisationEmail(email, name, token, refereeName, replyToEmail) {
   logDebug('sendAuthorizationEmail', 'Start', { email, name, refereeName });
   
   // FIXED: Hardcode Production URL to avoid Vercel preview auth issues
@@ -924,7 +985,10 @@ function sendAuthorisationEmail(email, name, token, refereeName) {
     </p>
   `;
   
-  sendBrandedEmail(email, subject, content);
+  const options = {};
+  if (replyToEmail) options.replyTo = replyToEmail;
+  
+  sendBrandedEmail(email, subject, content, options);
 }
 
 // --- Core Workflow: Authorization ---
@@ -1026,7 +1090,10 @@ function processCandidateConsent(token, decision, reason, message) {
       // Send Invite to Referee
       logDebug('processCandidateConsent', 'Sending Referee Invite', { email: request[colRefereeEmail] });
       try {
-          sendRefereeInviteEmail(request[colRefereeEmail], request[colRefereeName], request[colCandidateName], refereeToken);
+          // Use RequesterEmail as Reply-To
+          const requesterEmail = (colRequesterEmail !== -1) ? request[colRequesterEmail] : null;
+
+          sendRefereeInviteEmail(request[colRefereeEmail], request[colRefereeName], request[colCandidateName], refereeToken, requesterEmail);
           logDebug('processCandidateConsent', 'Invite Sent', { requestId });
       } catch (emailErr) {
           logDebug('processCandidateConsent', 'Invite Failed', { error: emailErr.toString() });
@@ -1083,7 +1150,7 @@ function processCandidateConsent(token, decision, reason, message) {
 
 
 
-function sendRefereeInviteEmail(email, name, candidateName, token) {
+function sendRefereeInviteEmail(email, name, candidateName, token, replyToEmail) {
   // FIXED: Hardcode Production URL
   const baseUrl = 'https://references.semester.co.uk';
   const inviteUrl = `${baseUrl}/?view=portal&token=${token}`;
@@ -1111,7 +1178,10 @@ function sendRefereeInviteEmail(email, name, candidateName, token) {
     </div>
   `;
   
-  sendBrandedEmail(email, subject, content);
+  const options = {};
+  if (replyToEmail) options.replyTo = replyToEmail;
+
+  sendBrandedEmail(email, subject, content, options);
 }
 
 function sendConsentDeclinedNotification(recipient, candidateName, reason) {
@@ -1241,6 +1311,72 @@ function validateRefereeToken(params) {
  */
 
 
+
+/**
+ * Validate responses against template rules
+ */
+function validateResponses(template, responses) {
+  let fields = [];
+  
+  // Flatten fields if nested in sections
+  if (template.sections) {
+    template.sections.forEach(s => fields.push(...s.fields));
+  } else if (template.structureJSON) {
+     if (Array.isArray(template.structureJSON)) {
+         fields = template.structureJSON;
+     } else if (template.structureJSON.sections) {
+         // Handle wrapped sections (C&F Template)
+         template.structureJSON.sections.forEach(s => fields.push(...s.fields));
+     }
+  }
+  
+  const errors = [];
+  
+  fields.forEach(field => {
+    let isRequired = field.required;
+    
+    // Check conditional logic
+    if (field.conditional) {
+      const parentValue = responses[field.conditional.field];
+      
+      let conditionMet = false;
+      if (Array.isArray(parentValue)) {
+          // If parent is checkbox-group (array), check inclusion
+          conditionMet = parentValue.includes(field.conditional.value);
+      } else {
+          conditionMet = (parentValue === field.conditional.value);
+      }
+      
+      if (conditionMet) {
+         if (field.conditional.required !== undefined) {
+            isRequired = field.conditional.required;
+         }
+      } else {
+         isRequired = false; 
+      }
+    }
+    
+    if (isRequired) {
+      const val = responses[field.id];
+      let isEmpty = false;
+      
+      if (Array.isArray(val)) {
+         isEmpty = val.length === 0;
+      } else {
+         isEmpty = val === undefined || val === null || val === '';
+      }
+      
+      if (isEmpty) {
+         errors.push(`Missing required field: ${field.label}`);
+      }
+    }
+  });
+  
+  if (errors.length > 0) {
+    throw new Error("Validation Failed: " + errors.join(", "));
+  }
+}
+
 function submitReference(token, responses, method, declineReason, declineDetails, uploadedFileUrl, fileName) {
 
   logDebug('submitReference', 'Start', { token, method });
@@ -1297,6 +1433,23 @@ function submitReference(token, responses, method, declineReason, declineDetails
       // Form submission
       requestsSheet.getRange(rowIndex + 1, 7).setValue('Completed');
       requestsSheet.getRange(rowIndex + 1, 17).setValue('form'); // Method
+      
+      // Validate Responses against Template
+      const templateId = request[13]; // TemplateID column
+      let template = null;
+      
+      // Get template definition
+      if (templateId === 'standard-social-care') {
+        template = DEFAULT_TEMPLATE;
+      } else {
+        // Fetch from sheet if custom (not implemented fully for custom yet, falling back to default if ID matches)
+        const allTemplates = getTemplates().data;
+        template = allTemplates.find(t => t.templateId === templateId);
+      }
+      
+      if (template) {
+         validateResponses(template, responses);
+      }
       
       storeResponses(requestId, responses);
       
@@ -1467,6 +1620,16 @@ function uploadReferenceDocument(payload) {
       fileUrl: fileUrl
     });
     
+    // Send Google Chat Notification
+    try {
+      const responses = fetchResponses(requestId);
+      const dates = extractDatesCovered(responses);
+      const candidateName = request[1];
+      sendChatNotification(candidateName, refereeName, dates, fileUrl);
+    } catch (chatError) {
+      console.error('Failed to send Chat Notification:', chatError);
+    }
+    
     return { 
       success: true, 
       fileUrl: fileUrl,
@@ -1483,7 +1646,19 @@ function uploadReferenceDocument(payload) {
 
 // --- Dashboard & Management ---
 
-function getMyRequests(includeArchived = false) {
+const ADMIN_EMAILS = ['rob@semester.co.uk', 'nicola@semester.co.uk', 'theresa@semester.co.uk'];
+const TEAM_GROUPS = [
+  ['sam@semester.co.uk', 'shaun@semester.co.uk'] // Social Care Team share requests
+];
+
+function getMyRequests(includeArchived = false, requesterEmail = null) {
+  // DEBUG: Log what we're receiving
+  logDebug('getMyRequests', 'Function Called', { 
+    requesterEmail: requesterEmail, 
+    includeArchived: includeArchived,
+    sessionUser: Session.getActiveUser().getEmail()
+  });
+  
   const ss = getDatabaseSpreadsheet();
   const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
   const data = requestsSheet.getDataRange().getValues();
@@ -1510,6 +1685,43 @@ function getMyRequests(includeArchived = false) {
     if (isArchived && !includeArchived) {
       continue;
     }
+
+    // --- Row Level Security ---
+    // CRITICAL FIX: Always apply security filtering, use session email as fallback
+    const filterEmail = requesterEmail || Session.getActiveUser().getEmail();
+    
+    if (filterEmail) {
+       const userLower = filterEmail.toLowerCase();
+       const isSuperUser = ADMIN_EMAILS.some(admin => admin.toLowerCase() === userLower);
+       
+       if (!isSuperUser) {
+          // FIX: Header is 'RequesterEmail', not 'CreatedByEmail'
+          const creator = (getVal(data[i], 'RequesterEmail') || '').toLowerCase();
+          
+          // Check if creator is me OR in my team
+          let isAllowed = (creator === userLower);
+          
+          if (!isAllowed) {
+             const myTeam = TEAM_GROUPS.find(team => team.some(member => member.toLowerCase() === userLower));
+             if (myTeam && myTeam.some(member => member.toLowerCase() === creator)) {
+                isAllowed = true;
+                logDebug('getMyRequests', 'Access Granted via Team', { user: userLower, creator, team: myTeam });
+             }
+          }
+          
+          if (!isAllowed) {
+             logDebug('getMyRequests', 'Access Denied', { user: userLower, creator, requestId: getVal(data[i], 'RequestID') });
+             continue; // Security Filter
+          }
+       } else {
+          logDebug('getMyRequests', 'SuperUser Access', { user: userLower, requestId: getVal(data[i], 'RequestID') });
+       }
+    } else {
+       // No user email available - deny all access (security fail-safe)
+       logDebug('getMyRequests', 'No User Email - Denying All', { requesterEmail, sessionUser: Session.getActiveUser().getEmail() });
+       continue;
+    }
+    // --------------------------
     
     const requestId = getVal(data[i], 'RequestID');
     const status = getVal(data[i], 'Status');
@@ -1628,8 +1840,9 @@ function fetchResponses(requestId) {
   return {};
 }
 
-function getRequest(requestId) {
-  const requests = getMyRequests().data;
+function getRequest(requestId, requesterEmail = null) {
+  // Use getMyRequests with security filter (includeArchived=true to find any request)
+  const requests = getMyRequests(true, requesterEmail).data;
   const request = requests.find(r => r.requestId === requestId);
   
   if (request && request.responses && typeof request.responses === 'string') {
@@ -1654,10 +1867,18 @@ function getTemplates() {
   const templates = [];
   for (let i = 1; i < data.length; i++) {
     try {
+      const json = JSON.parse(data[i][2]);
+      let structure = json;
+      // Flatten for frontend if structure is sections
+      if (!Array.isArray(json) && json.sections) {
+          structure = [];
+          json.sections.forEach(s => structure.push(...s.fields));
+      }
+
       templates.push({
         templateId: data[i][0],
         name: data[i][1],
-        structureJSON: JSON.parse(data[i][2]),
+        structureJSON: structure,
         active: true
       });
     } catch (e) {}
@@ -1675,10 +1896,19 @@ function getTemplateById(templateId) {
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === templateId) {
        try {
+         const json = JSON.parse(data[i][2]);
+         let sections = null;
+         
+         // Extract sections if available (for PDF Generator)
+         if (!Array.isArray(json) && json.sections) {
+            sections = json.sections;
+         }
+         
          return {
            templateId: data[i][0],
            name: data[i][1],
-           structureJSON: JSON.parse(data[i][2]),
+           structureJSON: json,
+           sections: sections,
            active: true
          };
        } catch (e) {
@@ -2368,4 +2598,152 @@ function debugSealLegacy() {
     backfill: backfillResult,
     seal: sealResult
   };
+}
+
+/**
+ * Get a map of Field ID -> Field Label for the default template
+ * @returns {Object} Map of fieldId: label
+ */
+function getTemplateFieldMapping() {
+  const template = getDefaultTemplate();
+  const mapping = {};
+  if (template && template.sections) {
+    template.sections.forEach(section => {
+      if (section.fields) {
+        section.fields.forEach(field => {
+          mapping[field.id] = field.label;
+        });
+      }
+    });
+  }
+  return mapping;
+}
+
+/**
+ * Setup Automated Triggers
+ */
+function setupTriggers() {
+  // Delete existing to avoid duplicates
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(t => {
+     if (t.getHandlerFunction() === 'runSmartChase') {
+        ScriptApp.deleteTrigger(t);
+     }
+  });
+  
+  // Create new Daily Trigger (e.g. at 9am)
+  ScriptApp.newTrigger('runSmartChase')
+     .timeBased()
+     .everyDays(1)
+     .atHour(9)
+     .create();
+     
+  return { success: true, message: 'Smart Chase Trigger Configured (Daily @ 9am)' };
+}
+
+/**
+ * Send Referee Reminder Email (Chase)
+ */
+function sendRefereeReminderEmail(email, name, candidateName, token, replyToEmail) {
+  const baseUrl = 'https://references.semester.co.uk';
+  const inviteUrl = `${baseUrl}/?view=portal&token=${token}`;
+  
+  const subject = `REMINDER: Reference Request for ${candidateName}`;
+   
+  const content = `
+    <div style="text-align: center; margin-bottom: 30px;">
+       <h2 style="color: #111827; font-weight: 600; margin: 0;">Reference Reminder</h2>
+    </div>
+    <p>Dear ${name},</p>
+    <p>
+      This is a polite reminder regarding the reference request for <strong>${candidateName}</strong>. 
+      We initiated this request recently and are still awaiting your feedback.
+    </p>
+    <p>
+      We understand you are busy, but your timely response is crucial for their application process. 
+      The form is designed to be quick and easy to complete.
+    </p>
+    <div style="margin: 32px 0; text-align: center;">
+      <a href="${inviteUrl}" class="button" style="background-color: #0052CC; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">Complete Reference</a>
+    </div>
+    <p style="font-size: 14px; color: #666;">
+      If you cannot provide a reference, please use the link above to let us know.
+    </p>
+  `;
+  
+  const options = {};
+  if (replyToEmail) options.replyTo = replyToEmail;
+
+  sendBrandedEmail(email, subject, content, options);
+}
+
+/**
+ * Send Candidate Consent Reminder Email (Chase)
+ */
+function sendCandidateConsentReminderEmail(email, name, token, refereeName, replyToEmail) {
+  const baseUrl = 'https://references.semester.co.uk';
+  const authUrl = `${baseUrl}/?view=portal&action=authorize&token=${token}`;
+  
+  const subject = `REMINDER: Authorisation needed for ${refereeName}`;
+  
+  const content = `
+    <div style="text-align: center; margin-bottom: 30px;">
+       <h2 style="color: #111827; font-weight: 600; margin: 0;">Authorisation Reminder</h2>
+    </div>
+    <p>Dear ${name},</p>
+    <p>
+      We recently sent you a request to authorise us to contact <strong>${refereeName}</strong> for a reference.
+    </p>
+    <p>
+      We cannot proceed without your consent. Please click the button below to review and approve this request.
+    </p>
+    <div style="margin: 32px 0; text-align: center;">
+      <a href="${authUrl}" class="button" style="background-color: #0052CC; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">Grant Consent</a>
+    </div>
+  `;
+  
+  const options = {};
+  if (replyToEmail) options.replyTo = replyToEmail; // Usually requester
+  
+  sendBrandedEmail(email, subject, content, options);
+}
+
+/**
+ * Create or Update "Evaluation Form" Template
+ */
+function forceCanonicalTemplateUpdateEvaluationForm() {
+   const ss = getDatabaseSpreadsheet();
+   const sheet = ss.getSheetByName('Template_Definitions');
+   
+   if (!sheet) throw new Error("Missing Template_Definitions sheet");
+   
+   const template = getEvaluationFormTemplate();
+   
+   const data = sheet.getDataRange().getValues();
+   let rowIndex = -1;
+   
+   // Find existing row by ID
+   for (let i = 1; i < data.length; i++) {
+     if (data[i][0] === template.templateId) {
+       rowIndex = i;
+       break;
+     }
+   }
+   
+   // Define Row Data
+   const rowData = [
+     template.templateId,
+     template.name,
+     JSON.stringify({ sections: template.sections }), 
+     true // Active
+   ];
+   
+   if (rowIndex === -1) {
+     sheet.appendRow(rowData);
+     return { success: true, message: "Created Template: " + template.templateId };
+   } else {
+     // Update Name, Structure, Active
+     sheet.getRange(rowIndex + 1, 1, 1, 4).setValues([rowData]);
+     return { success: true, message: "Updated Template: " + template.templateId };
+   }
 }

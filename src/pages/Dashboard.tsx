@@ -93,7 +93,7 @@ const Dashboard: React.FC = () => {
         setTimeout(() => setShowToast(false), 4000);
     };
 
-    const handleCreateRequest = async (formData: { candidateName: string; candidateEmail: string; refereeName: string; refereeEmail: string; templateId?: string }) => {
+    const handleCreateRequest = async (formData: { candidateName: string; candidateEmail: string; refereeName: string; refereeEmail: string; templateId?: string; skipCandidateConsent?: boolean }) => {
         if (!user?.email) return;
 
         // Optimistic Update
@@ -104,8 +104,8 @@ const Dashboard: React.FC = () => {
             candidateEmail: formData.candidateEmail,
             refereeName: formData.refereeName,
             refereeEmail: formData.refereeEmail,
-            status: 'PENDING_CONSENT',
-            consentStatus: false,
+            status: formData.skipCandidateConsent ? 'CONSENT_GIVEN' : 'PENDING_CONSENT',
+            consentStatus: !!formData.skipCandidateConsent,
             anomalyFlag: false,
             token: '',
             createdAt: new Date().toISOString()
@@ -122,7 +122,8 @@ const Dashboard: React.FC = () => {
                 refereeName: formData.refereeName,
                 refereeEmail: formData.refereeEmail,
                 templateId: formData.templateId || 'standard-social-care',
-                userEmail: user.email
+                userEmail: user.email,
+                skipCandidateConsent: formData.skipCandidateConsent
             }) as { success: boolean; requestId: string; error?: string };
 
             if (result.success) {

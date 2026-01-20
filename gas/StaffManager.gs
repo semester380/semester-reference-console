@@ -54,8 +54,13 @@ function initializeStaffSheet() {
       role: 'Recruiter'
     },
     {
-      name: 'Nicola Wilson',
+      name: 'Nicola Jenkinson',
       email: 'nicola@semester.co.uk',
+      role: 'Admin'
+    },
+    {
+      name: 'Nichola Wilson',
+      email: 'nwilson@semester.co.uk',
       role: 'Recruiter'
     },
     {

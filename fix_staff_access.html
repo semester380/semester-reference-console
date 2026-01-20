@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Fix Staff Access</title>
+</head>
+
+<body>
+    <h1>Fixing Staff Access</h1>
+    <div id="output"></div>
+
+    <script>
+        const ADMIN_API_KEY = 'AgXp9Km2Lq7Nv5Rt8Wz3Yc6Hf1Jd4Mb0Qx';
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbwQcSZ39aGVjBYIPOVk1h-lAxfdJi5cX6SbW_H9y7P3qn-fyPlEgCGtVNGCVjzwuxnt/exec';
+
+        const output = document.getElementById('output');
+
+        async function fixStaffAccess() {
+            output.innerHTML += '<h2>Starting Staff Access Fix...</h2>';
+
+            // Step 1: Get current staff list
+            output.innerHTML += '<p>Step 1: Fetching current staff list...</p>';
+            const listResponse = await fetch(GAS_URL + '?action=listStaff&adminKey=' + ADMIN_API_KEY);
+            const listResult = await listResponse.json();
+
+            output.innerHTML += '<pre>' + JSON.stringify(listResult, null, 2) + '</pre>';
+
+            if (!listResult.success) {
+                output.innerHTML += '<p style="color: red;">Failed to fetch staff list</p>';
+                return;
+            }
+
+            // Step 2: Find Nicola Jenkinson (nicola@semester.co.uk) and update to Admin
+            const nicolaJenkinson = listResult.data.find(s => s.email === 'nicola@semester.co.uk');
+
+            if (nicolaJenkinson) {
+                output.innerHTML += '<p>Step 2: Updating Nicola Jenkinson to Admin role...</p>';
+
+                const updateResponse = await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'updateStaff',
+                        adminKey: ADMIN_API_KEY,
+                        staffId: nicolaJenkinson.staffId,
+                        name: 'Nicola Jenkinson',
+                        role: 'Admin'
+                    })
+                });
+
+                const updateResult = await updateResponse.json();
+                output.innerHTML += '<pre>Update Result: ' + JSON.stringify(updateResult, null, 2) + '</pre>';
+            } else {
+                output.innerHTML += '<p style="color: orange;">Nicola Jenkinson (nicola@semester.co.uk) not found. Will add as new.</p>';
+
+                // Add Nicola Jenkinson as Admin
+                const addNicolaResponse = await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'addStaff',
+                        adminKey: ADMIN_API_KEY,
+                        name: 'Nicola Jenkinson',
+                        email: 'nicola@semester.co.uk',
+                        role: 'Admin'
+                    })
+                });
+
+                const addNicolaResult = await addNicolaResponse.json();
+                output.innerHTML += '<pre>Add Nicola Result: ' + JSON.stringify(addNicolaResult, null, 2) + '</pre>';
+            }
+
+            // Step 3: Check if Nichola Wilson (nwilson@semester.co.uk) exists
+            const nicholaWilson = listResult.data.find(s => s.email === 'nwilson@semester.co.uk');
+
+            if (nicholaWilson) {
+                output.innerHTML += '<p>Step 3: Nichola Wilson (nwilson@semester.co.uk) already exists</p>';
+            } else {
+                output.innerHTML += '<p>Step 3: Adding Nichola Wilson (nwilson@semester.co.uk) as Recruiter...</p>';
+
+                const addNicholaResponse = await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'addStaff',
+                        adminKey: ADMIN_API_KEY,
+                        name: 'Nichola Wilson',
+                        email: 'nwilson@semester.co.uk',
+                        role: 'Recruiter'
+                    })
+                });
+
+                const addNicholaResult = await addNicholaResponse.json();
+                output.innerHTML += '<pre>Add Nichola Result: ' + JSON.stringify(addNicholaResult, null, 2) + '</pre>';
+            }
+
+            // Step 4: Verify both accounts
+            output.innerHTML += '<h2>Step 4: Verifying Both Accounts...</h2>';
+
+            // Verify Nicola Jenkinson
+            const verifyNicolaResponse = await fetch(GAS_URL + '?action=verifyStaff&adminKey=' + ADMIN_API_KEY + '&userEmail=nicola@semester.co.uk');
+            const verifyNicolaResult = await verifyNicolaResponse.json();
+            output.innerHTML += '<p><strong>Nicola Jenkinson (nicola@semester.co.uk):</strong></p>';
+            output.innerHTML += '<pre>' + JSON.stringify(verifyNicolaResult, null, 2) + '</pre>';
+
+            // Verify Nichola Wilson
+            const verifyNicholaResponse = await fetch(GAS_URL + '?action=verifyStaff&adminKey=' + ADMIN_API_KEY + '&userEmail=nwilson@semester.co.uk');
+            const verifyNicholaResult = await verifyNicholaResponse.json();
+            output.innerHTML += '<p><strong>Nichola Wilson (nwilson@semester.co.uk):</strong></p>';
+            output.innerHTML += '<pre>' + JSON.stringify(verifyNicholaResult, null, 2) + '</pre>';
+
+            output.innerHTML += '<h2 style="color: green;">✅ Staff Access Fix Complete!</h2>';
+        }
+
+        // Run on load
+        fixStaffAccess();
+    </script>
+</body>
+
+</html>

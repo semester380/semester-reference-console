@@ -6,7 +6,7 @@ import type { Template } from '../types';
 interface NewRequestModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSubmit: (data: { candidateName: string; candidateEmail: string; refereeName: string; refereeEmail: string; templateId: string }) => void;
+    onSubmit: (data: { candidateName: string; candidateEmail: string; refereeName: string; refereeEmail: string; templateId: string; skipCandidateConsent?: boolean }) => void;
 }
 
 export const NewRequestModal: React.FC<NewRequestModalProps> = ({ isOpen, onClose, onSubmit }) => {
@@ -15,6 +15,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({ isOpen, onClos
         candidateEmail: '',
         refereeName: '',
         refereeEmail: '',
+        skipCandidateConsent: false,
     });
 
     const [templates, setTemplates] = useState<Template[]>([]);
@@ -84,10 +85,13 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({ isOpen, onClos
         const newErrors: Record<string, string> = {};
         let hasError = false;
         Object.keys(formData).forEach(key => {
-            const error = validateField(key, formData[key as keyof typeof formData]);
-            if (error) {
-                newErrors[key] = error;
-                hasError = true;
+            const value = formData[key as keyof typeof formData];
+            if (typeof value === 'string') {
+                const error = validateField(key, value);
+                if (error) {
+                    newErrors[key] = error;
+                    hasError = true;
+                }
             }
         });
 
@@ -236,8 +240,28 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({ isOpen, onClos
                             />
                         </div>
 
+                        {/* Staff Override (Urgent) */}
+                        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 mt-6">
+                            <h3 className="text-sm font-semibold text-orange-800 mb-2 flex items-center">
+                                <span className="mr-2">⚡</span> Urgent Request Override
+                            </h3>
+                            <label className="flex items-start cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={formData.skipCandidateConsent}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, skipCandidateConsent: e.target.checked }))}
+                                    className="mt-1 mr-3 h-4 w-4 text-orange-600 rounded border-orange-300 focus:ring-orange-500"
+                                />
+                                <span className="text-sm text-orange-800">
+                                    <strong>Skip candidate authorization.</strong> The referee will be contacted immediately.
+                                    <br />
+                                    <span className="text-xs opacity-75">Only use this if you have obtained consent offline or require an urgent reference.</span>
+                                </span>
+                            </label>
+                        </div>
+
                         {/* Compliance Guardrails */}
-                        <div className="bg-nano-gray-50 p-4 rounded-lg border border-nano-gray-200 mt-6">
+                        <div className="bg-nano-gray-50 p-4 rounded-lg border border-nano-gray-200 mt-4">
                             <h3 className="text-sm font-semibold text-nano-gray-900 mb-2 flex items-center">
                                 <span className="text-semester-blue mr-2">🛡️</span> Compliance Check
                             </h3>
@@ -250,7 +274,9 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({ isOpen, onClos
                                 />
                                 <span className="text-sm text-nano-gray-600">
                                     I confirm that this request complies with the organisation's data protection policies.
-                                    The candidate will be automatically contacted for consent before the referee is approached.
+                                    {formData.skipCandidateConsent
+                                        ? " I accept responsibility for bypassing the candidate consent step."
+                                        : " The candidate will be automatically contacted for consent before the referee is approached."}
                                 </span>
                             </label>
                         </div>

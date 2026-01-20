@@ -127,17 +127,22 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
 
         setIsSealing(true);
         try {
-            const result = await runGAS('sealRequest', { requestId, userEmail: user.email }) as { success: boolean; error?: string };
+            console.log('[Seal] Attempting to seal request:', requestId);
+            const result = await runGAS('sealRequest', { requestId, userEmail: user.email }) as { success: boolean; error?: string; pdfUrl?: string };
+            console.log('[Seal] Backend response:', result);
+
             if (result.success) {
                 alert('Reference sealed successfully!');
                 if (onSealed) onSealed();
                 onClose();
             } else {
-                alert('Failed to seal: ' + result.error);
+                const errorMsg = result.error || 'Unknown error occurred';
+                console.error('[Seal] Failed:', errorMsg);
+                alert('Failed to seal reference:\n\n' + errorMsg + '\n\nPlease check the console for details or contact support.');
             }
         } catch (e) {
-            console.error(e);
-            alert('An error occurred while sealing.');
+            console.error('[Seal] Exception:', e);
+            alert('An error occurred while sealing:\n\n' + (e instanceof Error ? e.message : String(e)) + '\n\nPlease check the console for details.');
         } finally {
             setIsSealing(false);
         }
