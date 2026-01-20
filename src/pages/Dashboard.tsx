@@ -273,9 +273,9 @@ const Dashboard: React.FC = () => {
             </Header>
 
             {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-6 py-8">
+            <main className="max-w-[1400px] mx-auto px-6 py-8">
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
                     <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setStatusFilter('all'); setShowArchived(false); }}>
                         <div className="text-sm text-nano-gray-600 mb-1">Active Requests</div>
                         <div className="text-3xl font-semibold text-nano-gray-900">{stats.total}</div>
