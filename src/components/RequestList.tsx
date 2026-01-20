@@ -20,7 +20,31 @@ export const RequestList: React.FC<RequestListProps> = ({
     showArchived = false
 }) => {
 
+    const [copiedId, setCopiedId] = useState<string | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+    const copyToClipboard = (text: string, id: string, type: 'referee' | 'candidate') => {
+        navigator.clipboard.writeText(text);
+        setCopiedId(`${id}-${type}`);
+        setTimeout(() => setCopiedId(null), 2000);
+    };
+
+    const getMockRefereeLink = (req: Request) => {
+        const token = req.refereeToken;
+        if (!token) {
+            return '#';
+        }
+        return `${window.location.origin}?view=portal&token=${token}`;
+    };
+
+    const getMockCandidateLink = (req: Request) => {
+        const token = req.token;
+        if (!token) {
+            console.error('Missing consent token for request:', req.requestId);
+            return '#';
+        }
+        return `${window.location.origin}?view=portal&action=authorize&token=${token}`;
+    };
 
     const toggleGroup = (candidateEmail: string) => {
         setExpandedGroups(prev => {
@@ -274,14 +298,32 @@ export const RequestList: React.FC<RequestListProps> = ({
                                                             <div className="text-xs text-nano-gray-500 pl-5">
                                                                 Created: {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '-'}
                                                             </div>
-                                                            {onViewRequest && (
-                                                                <button
-                                                                    onClick={() => onViewRequest(req)}
-                                                                    className="text-semester-blue hover:text-semester-blue-dark text-xs font-medium pl-5 pt-1"
-                                                                >
-                                                                    View Details →
-                                                                </button>
-                                                            )}
+                                                            <div className="flex gap-2 pl-5 pt-2">
+                                                                {onViewRequest && (
+                                                                    <button
+                                                                        onClick={() => onViewRequest(req)}
+                                                                        className="text-semester-blue hover:text-semester-blue-dark text-xs font-medium"
+                                                                    >
+                                                                        View Details →
+                                                                    </button>
+                                                                )}
+                                                                {!req.archived && (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={() => copyToClipboard(getMockRefereeLink(req), req.requestId, 'referee')}
+                                                                            className="text-xs px-2 py-1 hover:bg-nano-gray-100 rounded text-nano-gray-600"
+                                                                        >
+                                                                            {copiedId === `${req.requestId}-referee` ? '✅' : '🔗'} Ref Link
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => copyToClipboard(getMockCandidateLink(req), req.requestId, 'candidate')}
+                                                                            className="text-xs px-2 py-1 hover:bg-nano-gray-100 rounded text-nano-gray-600"
+                                                                        >
+                                                                            {copiedId === `${req.requestId}-candidate` ? '✅' : '📧'} Consent
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -308,14 +350,32 @@ export const RequestList: React.FC<RequestListProps> = ({
                                             <div className="text-xs text-nano-gray-400">
                                                 Created: {group.references[0].createdAt ? new Date(group.references[0].createdAt).toLocaleDateString() : '-'}
                                             </div>
-                                            {onViewRequest && (
-                                                <button
-                                                    onClick={() => onViewRequest(group.references[0])}
-                                                    className="text-semester-blue hover:text-semester-blue-dark text-xs font-medium pt-2"
-                                                >
-                                                    View Details →
-                                                </button>
-                                            )}
+                                            <div className="flex flex-wrap gap-2 pt-2">
+                                                {onViewRequest && (
+                                                    <button
+                                                        onClick={() => onViewRequest(group.references[0])}
+                                                        className="text-semester-blue hover:text-semester-blue-dark text-xs font-medium"
+                                                    >
+                                                        View Details →
+                                                    </button>
+                                                )}
+                                                {!group.references[0].archived && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => copyToClipboard(getMockRefereeLink(group.references[0]), group.references[0].requestId, 'referee')}
+                                                            className="text-xs px-2 py-1 hover:bg-nano-gray-100 rounded text-nano-gray-600"
+                                                        >
+                                                            {copiedId === `${group.references[0].requestId}-referee` ? '✅' : '🔗'} Ref Link
+                                                        </button>
+                                                        <button
+                                                            onClick={() => copyToClipboard(getMockCandidateLink(group.references[0]), group.references[0].requestId, 'candidate')}
+                                                            className="text-xs px-2 py-1 hover:bg-nano-gray-100 rounded text-nano-gray-600"
+                                                        >
+                                                            {copiedId === `${group.references[0].requestId}-candidate` ? '✅' : '📧'} Consent
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -407,14 +467,32 @@ export const RequestList: React.FC<RequestListProps> = ({
                                                         {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '-'}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                        {onViewRequest && (
-                                                            <button
-                                                                onClick={() => onViewRequest(req)}
-                                                                className="text-semester-blue hover:text-semester-blue-dark text-sm font-medium"
-                                                            >
-                                                                View →
-                                                            </button>
-                                                        )}
+                                                        <div className="flex justify-end gap-2">
+                                                            {onViewRequest && (
+                                                                <button
+                                                                    onClick={() => onViewRequest(req)}
+                                                                    className="text-semester-blue hover:text-semester-blue-dark text-sm font-medium"
+                                                                >
+                                                                    View →
+                                                                </button>
+                                                            )}
+                                                            {!req.archived && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => copyToClipboard(getMockRefereeLink(req), req.requestId, 'referee')}
+                                                                        className="text-nano-gray-600 hover:text-semester-blue text-xs font-medium px-2 py-1 hover:bg-nano-gray-100 rounded"
+                                                                    >
+                                                                        {copiedId === `${req.requestId}-referee` ? '✅' : '🔗'} Ref Link
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => copyToClipboard(getMockCandidateLink(req), req.requestId, 'candidate')}
+                                                                        className="text-nano-gray-600 hover:text-semester-blue text-xs font-medium px-2 py-1 hover:bg-nano-gray-100 rounded"
+                                                                    >
+                                                                        {copiedId === `${req.requestId}-candidate` ? '✅' : '📧'} Consent
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -439,14 +517,32 @@ export const RequestList: React.FC<RequestListProps> = ({
                                                 {group.references[0].createdAt ? new Date(group.references[0].createdAt).toLocaleDateString() : '-'}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                {onViewRequest && (
-                                                    <button
-                                                        onClick={() => onViewRequest(group.references[0])}
-                                                        className="text-semester-blue hover:text-semester-blue-dark text-sm font-medium"
-                                                    >
-                                                        View
-                                                    </button>
-                                                )}
+                                                <div className="flex justify-end gap-2">
+                                                    {onViewRequest && (
+                                                        <button
+                                                            onClick={() => onViewRequest(group.references[0])}
+                                                            className="text-semester-blue hover:text-semester-blue-dark text-sm font-medium"
+                                                        >
+                                                            View
+                                                        </button>
+                                                    )}
+                                                    {!group.references[0].archived && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => copyToClipboard(getMockRefereeLink(group.references[0]), group.references[0].requestId, 'referee')}
+                                                                className="text-nano-gray-600 hover:text-semester-blue text-xs font-medium px-2 py-1 hover:bg-nano-gray-100 rounded"
+                                                            >
+                                                                {copiedId === `${group.references[0].requestId}-referee` ? '✅' : '🔗'} Ref Link
+                                                            </button>
+                                                            <button
+                                                                onClick={() => copyToClipboard(getMockCandidateLink(group.references[0]), group.references[0].requestId, 'candidate')}
+                                                                className="text-nano-gray-600 hover:text-semester-blue text-xs font-medium px-2 py-1 hover:bg-nano-gray-100 rounded"
+                                                            >
+                                                                {copiedId === `${group.references[0].requestId}-candidate` ? '✅' : '📧'} Consent
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     )}
