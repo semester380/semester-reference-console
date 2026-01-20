@@ -35,6 +35,7 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
     const [requestData, setRequestData] = useState<Request | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [isUploadingEmail, setIsUploadingEmail] = useState(false);
 
     useEffect(() => {
         if (user?.email) {
@@ -183,6 +184,81 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
         } finally {
             setIsGeneratingPdf(false);
         }
+    };
+
+    const handleEmailReceived = async () => {
+        if (!requestData?.requestId || !user?.email) return;
+
+        // Create file input element
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.pdf,.doc,.docx';
+
+        fileInput.onchange = async (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+
+            try {
+                setIsUploadingEmail(true);
+
+                // For now, we'll use a simple approach: upload to Google Drive via the uploadReferenceDocument endpoint
+                // Convert file to base64
+                const reader = new FileReader();
+
+                const base64Promise = new Promise<string>((resolve, reject) => {
+                    reader.onload = () => {
+                        const base64 = (reader.result as string).split(',')[1];
+                        resolve(base64);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+
+                const base64Content = await base64Promise;
+
+                // Upload file using existing endpoint
+                const uploadResult = await runGAS('uploadReferenceDocument', {
+                    fileData: base64Content,
+                    fileName: file.name,
+                    mimeType: file.type
+                });
+
+                if (uploadResult && uploadResult.success && uploadResult.fileUrl) {
+                    // Mark as received via email
+                    const result = await runGAS('receiveEmailReference', {
+                        requestId: requestData.requestId,
+                        fileUrl: uploadResult.fileUrl,
+                        fileName: file.name,
+                        notes: 'Reference received via email reply',
+                        userEmail: user.email
+                    });
+
+                    if (result && result.success) {
+                        alert('Reference marked as received via email successfully!');
+                        // Refresh the request data
+                        const refreshed = await runGAS('getRequest', { requestId: requestData.requestId });
+                        if (refreshed && refreshed.success && refreshed.data) {
+                            setRequestData(refreshed.data);
+                        }
+                        onClose(); // Close the modal
+                    } else {
+                        console.error("Failed to mark as received:", result?.error);
+                        alert(`Failed to mark as received: ${result?.error || "Unknown error"}`);
+                    }
+                } else {
+                    console.error("File upload failed:", uploadResult?.error);
+                    alert(`File upload failed: ${uploadResult?.error || "Unknown error"}`);
+                }
+            } catch (e) {
+                console.error("Email received error:", e);
+                const errorMsg = e instanceof Error ? e.message : String(e);
+                alert(`An error occurred: ${errorMsg}`);
+            } finally {
+                setIsUploadingEmail(false);
+            }
+        };
+
+        fileInput.click();
     };
 
 
@@ -593,7 +669,7 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
                     </div>
 
                     {/* Actions */}
-                    <div className="flex gap-3 pt-6 border-t border-nano-gray-200">
+                    <div className="flex flex-wrap gap-3 pt-6 border-t border-nano-gray-200">
                         {['Completed', 'SEALED', 'Sealed'].includes(currentStatus) && (
                             <>
                                 {requestData?.pdfUrl || requestData?.pdfFileId ? (
@@ -639,6 +715,29 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
                                 )}
                             </>
                         )}
+
+                        {['PENDING_CONSENT', 'CONSENT_GIVEN', 'Awaiting Reference', 'Pending Consent'].includes(currentStatus) && (
+                            <Button
+                                onClick={handleEmailReceived}
+                                disabled={isUploadingEmail}
+                                className="bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-600/20"
+                            >
+                                {isUploadingEmail ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Uploading...
+                                    </>
+                                ) : (
+                                    <>
+                                        📧 Received via Email
+                                    </>
+                                )}
+                            </Button>
+                        )}
+
                         <Button variant="secondary" onClick={() => setShowAudit(!showAudit)}>
                             {showAudit ? 'Hide' : 'View'} Full Audit Log
                         </Button>

@@ -292,7 +292,7 @@ function handleApiRequest(e) {
     ];
     
     const staffEndpoints = [
-      'initiateRequest', 'getMyRequests', 'getRequest', 'getAuditTrail', 'downloadPdfPayload', 'regeneratePdf'
+      'initiateRequest', 'getMyRequests', 'getRequest', 'getAuditTrail', 'downloadPdfPayload', 'regeneratePdf', 'receiveEmailReference'
     ];
 
     const isPublic = publicEndpoints.includes(action);
@@ -504,6 +504,9 @@ function handleApiRequest(e) {
         break;
       case 'regeneratePdf':
         result = regeneratePdfForRequest(payload.requestId);
+        break;
+      case 'receiveEmailReference':
+        result = receiveEmailReference(payload.requestId, payload.fileUrl, payload.fileName, payload.notes, staff);
         break;
       
       // Staff Management (Admin Only)
@@ -2864,4 +2867,89 @@ function forceCanonicalTemplateUpdateEvaluationForm() {
      sheet.getRange(rowIndex + 1, 1, 1, 4).setValues([rowData]);
      return { success: true, message: "Updated Template: " + template.templateId };
    }
+}
+
+/**
+ * Handle reference received via email
+ * Marks reference as completed and stores the email attachment
+ */
+function receiveEmailReference(requestId, fileUrl, fileName, notes, staff) {
+  try {
+    const ss = getDatabaseSpreadsheet();
+    const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
+    if (!requestsSheet) {
+      return { success: false, error: "Database not found" };
+    }
+    
+    const data = requestsSheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    const colMap = {};
+    headers.forEach((h, i) => colMap[h] = i);
+    const getVal = (row, name) => row[colMap[name]];
+    
+    const requestIdCol = colMap['RequestID'];
+    if (requestIdCol === undefined) {
+      return { success: false, error: "Invalid sheet structure" };
+    }
+    
+    const rowIndex = data.slice(1).findIndex(r => r[requestIdCol] === requestId);
+    if (rowIndex === -1) {
+      return { success: false, error: `Request not found: ${requestId}` };
+    }
+    
+    const row = data[rowIndex + 1];
+    const actualRowIndex = rowIndex + 2;
+    
+    const currentStatus = getVal(row, 'Status');
+    if (currentStatus === 'Completed' || currentStatus === 'Declined' || currentStatus === 'SEALED') {
+      return { success: false, error: "Reference already completed or declined" };
+    }
+    
+    const now = new Date();
+    const statusCol = colMap['Status'];
+    const methodCol = colMap['Method'];
+    const uploadedFileUrlCol = colMap['UploadedFileUrl'];
+    const fileNameCol = colMap['FileName'];
+    const updatedAtCol = colMap['UpdatedAt'];
+    
+    if (statusCol !== undefined) {
+      requestsSheet.getRange(actualRowIndex, statusCol + 1).setValue('Completed');
+    }
+    if (methodCol !== undefined) {
+      requestsSheet.getRange(actualRowIndex, methodCol + 1).setValue('email-upload');
+    }
+    if (uploadedFileUrlCol !== undefined && fileUrl) {
+      requestsSheet.getRange(actualRowIndex, uploadedFileUrlCol + 1).setValue(fileUrl);
+    }
+    if (fileNameCol !== undefined && fileName) {
+      requestsSheet.getRange(actualRowIndex, fileNameCol + 1).setValue(fileName);
+    }
+    if (updatedAtCol !== undefined) {
+      requestsSheet.getRange(actualRowIndex, updatedAtCol + 1).setValue(now);
+    }
+    
+    const auditNotes = notes ? `Staff notes: ${notes}` : 'Received via email reply';
+    logAudit(requestId, staff ? staff.email : 'Staff', staff ? staff.name : 'Staff', 'Staff', 'EMAIL_REFERENCE_RECEIVED', { 
+      fileName: fileName,
+      notes: auditNotes,
+      staffEmail: staff ? staff.email : 'unknown'
+    });
+    
+    try {
+      sendReferenceCompletedNotification(requestId, 'email-upload');
+    } catch (emailErr) {
+      console.warn('Failed to send email notification:', emailErr);
+    }
+    
+    return { 
+      success: true, 
+      message: "Reference marked as received via email",
+      requestId: requestId
+    };
+    
+  } catch (e) {
+    console.error("receiveEmailReference Error: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
 }
