@@ -275,7 +275,7 @@ const Dashboard: React.FC = () => {
             {/* Main Content */}
             <main className="max-w-7xl mx-auto px-6 py-8">
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                     <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setStatusFilter('all'); setShowArchived(false); }}>
                         <div className="text-sm text-nano-gray-600 mb-1">Active Requests</div>
                         <div className="text-3xl font-semibold text-nano-gray-900">{stats.total}</div>
@@ -300,11 +300,6 @@ const Dashboard: React.FC = () => {
                         <div className="text-sm text-nano-gray-600 mb-1">Declined</div>
                         <div className="text-3xl font-semibold text-status-error">{stats.declined}</div>
                         <div className="text-xs text-nano-gray-400 mt-1">Declined by referee</div>
-                    </Card>
-                    <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setStatusFilter('archived'); setShowArchived(true); }}>
-                        <div className="text-sm text-nano-gray-600 mb-1">Archived</div>
-                        <div className="text-3xl font-semibold text-nano-gray-400">{stats.archived}</div>
-                        <div className="text-xs text-nano-gray-400 mt-1">Hidden from view</div>
                     </Card>
                 </div>
 
