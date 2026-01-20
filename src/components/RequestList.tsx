@@ -8,8 +8,6 @@ interface RequestListProps {
     onViewRequest?: (request: Request) => void;
     statusFilter?: string;
     searchQuery?: string;
-    selectedIds?: Set<string>;
-    onSelectionChange?: (selectedIds: Set<string>) => void;
     showArchived?: boolean;
 }
 
@@ -19,11 +17,22 @@ export const RequestList: React.FC<RequestListProps> = ({
     onViewRequest,
     statusFilter = 'all',
     searchQuery = '',
-    selectedIds = new Set(),
-    onSelectionChange,
     showArchived = false
 }) => {
-    const [copiedId, setCopiedId] = useState<string | null>(null);
+
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+    const toggleGroup = (candidateEmail: string) => {
+        setExpandedGroups(prev => {
+            const next = new Set(prev);
+            if (next.has(candidateEmail)) {
+                next.delete(candidateEmail);
+            } else {
+                next.add(candidateEmail);
+            }
+            return next;
+        });
+    };
 
     if (isLoading) {
         return (
@@ -88,6 +97,39 @@ export const RequestList: React.FC<RequestListProps> = ({
             req.refereeEmail.toLowerCase().includes(query)
         );
     }
+
+    // Group requests by candidate
+    const candidateGroups: Array<{
+        candidateName: string;
+        candidateEmail: string;
+        references: Request[];
+        statusCounts: { [key: string]: number };
+    }> = [];
+
+    const groupedMap = new Map<string, Request[]>();
+
+    filteredRequests.forEach(req => {
+        const key = `${req.candidateEmail}`;
+        if (!groupedMap.has(key)) {
+            groupedMap.set(key, []);
+        }
+        groupedMap.get(key)!.push(req);
+    });
+
+    groupedMap.forEach((references) => {
+        const statusCounts: { [key: string]: number } = {};
+        references.forEach(ref => {
+            const status = ref.status;
+            statusCounts[status] = (statusCounts[status] || 0) + 1;
+        });
+
+        candidateGroups.push({
+            candidateName: references[0].candidateName,
+            candidateEmail: references[0].candidateEmail,
+            references: references.sort((a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime()),
+            statusCounts
+        });
+    });
 
     if (filteredRequests.length === 0 && (statusFilter !== 'all' || searchQuery.trim())) {
         return (
@@ -166,58 +208,7 @@ export const RequestList: React.FC<RequestListProps> = ({
         return <Badge variant={config.variant}>{config.label}</Badge>;
     };
 
-    const copyToClipboard = (text: string, id: string, type: 'referee' | 'candidate') => {
-        navigator.clipboard.writeText(text);
-        setCopiedId(`${id}-${type}`);
-        setTimeout(() => setCopiedId(null), 2000);
-    };
 
-    const getMockRefereeLink = (req: Request) => {
-        // Only use refereeToken if it exists. Do not fall back to req.token (which is consent token).
-        const token = req.refereeToken;
-        if (!token) {
-            // If no referee token (e.g. consent not given yet), return empty or handle gracefully
-            return '#';
-        }
-        return `${window.location.origin}?view=portal&token=${token}`;
-    };
-
-    const getMockCandidateLink = (req: Request) => {
-        // req.token is the consent token from the backend (ConsentToken column)
-        const token = req.token;
-        if (!token) {
-            console.error('Missing consent token for request:', req.requestId);
-            return '#';
-        }
-        return `${window.location.origin}?view=portal&action=authorize&token=${token}`;
-    };
-
-    // Selection handlers
-    const handleSelectAll = (checked: boolean) => {
-        if (onSelectionChange) {
-            if (checked) {
-                const allIds = new Set(filteredRequests.map(r => r.requestId));
-                onSelectionChange(allIds);
-            } else {
-                onSelectionChange(new Set());
-            }
-        }
-    };
-
-    const handleSelectRow = (requestId: string, checked: boolean) => {
-        if (onSelectionChange) {
-            const newSelection = new Set(selectedIds);
-            if (checked) {
-                newSelection.add(requestId);
-            } else {
-                newSelection.delete(requestId);
-            }
-            onSelectionChange(newSelection);
-        }
-    };
-
-    const allSelected = filteredRequests.length > 0 && filteredRequests.every(r => selectedIds.has(r.requestId));
-    const someSelected = filteredRequests.some(r => selectedIds.has(r.requestId));
 
     return (
         <div className="bg-white rounded-xl shadow-sm border border-nano-gray-200 overflow-hidden">
@@ -231,71 +222,105 @@ export const RequestList: React.FC<RequestListProps> = ({
                     </div>
                 ) : (
                     <div className="divide-y divide-nano-gray-200">
-                        {filteredRequests.map((req) => (
-                            <div
-                                key={req.requestId}
-                                className={`p-4 hover:bg-nano-gray-50 transition-colors ${req.archived ? 'opacity-60 bg-nano-gray-50' : ''
-                                    } ${selectedIds.has(req.requestId) ? 'bg-semester-blue/5' : ''}`}
-                            >
-                                {onSelectionChange && (
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedIds.has(req.requestId)}
-                                            onChange={(e) => handleSelectRow(req.requestId, e.target.checked)}
-                                            className="w-4 h-4 text-semester-blue border-nano-gray-300 rounded focus:ring-semester-blue"
-                                        />
-                                        {getStatusBadge(req.status, req.archived)}
-                                        {req.anomalyFlag && !req.archived && (
-                                            <Badge variant="error" className="text-xs">⚠️ Flagged</Badge>
-                                        )}
-                                    </div>
-                                )}
+                        {candidateGroups.map((group) => {
+                            const isExpanded = expandedGroups.has(group.candidateEmail);
+                            const isMultiple = group.references.length > 1;
 
-                                <div className="space-y-2">
-                                    <div>
-                                        <div className={`font-medium text-sm ${req.archived ? 'text-nano-gray-500' : 'text-nano-gray-900'}`}>
-                                            {req.candidateName}
-                                        </div>
-                                        <div className="text-xs text-nano-gray-500">{req.candidateEmail}</div>
-                                        <div className="text-xs text-nano-gray-400 mt-1 flex items-center gap-1">
-                                            <span>→</span> {req.refereeName}
-                                        </div>
-                                    </div>
-
-                                    <div className="text-xs text-nano-gray-400">
-                                        Created: {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '-'}
-                                    </div>
-
-                                    <div className="flex flex-wrap gap-2 pt-2">
-                                        {onViewRequest && (
-                                            <button
-                                                onClick={() => onViewRequest(req)}
-                                                className="text-semester-blue hover:text-semester-blue-dark text-xs font-medium px-2 py-1 hover:bg-semester-blue/10 rounded transition-all"
+                            return (
+                                <div key={group.candidateEmail} className="p-4">
+                                    {isMultiple ? (
+                                        <>
+                                            {/* Grouped header - clickable */}
+                                            <div
+                                                onClick={() => toggleGroup(group.candidateEmail)}
+                                                className="cursor-pointer hover:bg-nano-gray-50 -m-4 p-4 rounded-lg transition-colors"
                                             >
-                                                👁 View
-                                            </button>
-                                        )}
-                                        {!req.archived && (
-                                            <>
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex-1">
+                                                        <div className="font-semibold text-nano-gray-900 flex items-center gap-2">
+                                                            👤 {group.candidateName}
+                                                            <span className="text-xs font-normal text-nano-gray-500">
+                                                                ({group.references.length} references)
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-xs text-nano-gray-500 mt-1">
+                                                            📧 {group.candidateEmail}
+                                                        </div>
+                                                        <div className="text-xs text-nano-gray-600 mt-2 flex flex-wrap gap-1">
+                                                            {Object.entries(group.statusCounts).map(([status, count]) => (
+                                                                <span key={status} className="inline-flex items-center gap-1">
+                                                                    {getStatusBadge(status as any, false)}
+                                                                    <span className="text-nano-gray-400">×{count}</span>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-nano-gray-400 text-xl ml-2">
+                                                        {isExpanded ? '⌃' : '⌄'}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Expanded individual references */}
+                                            {isExpanded && (
+                                                <div className="mt-4 pl-4 border-l-2 border-nano-gray-200 space-y-3">
+                                                    {group.references.map(req => (
+                                                        <div key={req.requestId} className="text-sm">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="text-nano-gray-400">→</span>
+                                                                <span className="font-medium text-nano-gray-700">{req.refereeName}</span>
+                                                                {getStatusBadge(req.status, req.archived)}
+                                                            </div>
+                                                            <div className="text-xs text-nano-gray-500 pl-5">
+                                                                Created: {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '-'}
+                                                            </div>
+                                                            {onViewRequest && (
+                                                                <button
+                                                                    onClick={() => onViewRequest(req)}
+                                                                    className="text-semester-blue hover:text-semester-blue-dark text-xs font-medium pl-5 pt-1"
+                                                                >
+                                                                    View Details →
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        // Single reference - show directly without grouping UI
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                {getStatusBadge(group.references[0].status, group.references[0].archived)}
+                                                {group.references[0].anomalyFlag && (
+                                                    <Badge variant="error" className="text-xs">⚠️ Flagged</Badge>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div className="font-medium text-sm text-nano-gray-900">
+                                                    {group.candidateName}
+                                                </div>
+                                                <div className="text-xs text-nano-gray-500">{group.candidateEmail}</div>
+                                                <div className="text-xs text-nano-gray-400 mt-1 flex items-center gap-1">
+                                                    <span>→</span> {group.references[0].refereeName}
+                                                </div>
+                                            </div>
+                                            <div className="text-xs text-nano-gray-400">
+                                                Created: {group.references[0].createdAt ? new Date(group.references[0].createdAt).toLocaleDateString() : '-'}
+                                            </div>
+                                            {onViewRequest && (
                                                 <button
-                                                    onClick={() => copyToClipboard(getMockRefereeLink(req), req.requestId, 'referee')}
-                                                    className="text-nano-gray-600 hover:text-semester-blue text-xs font-medium px-2 py-1 hover:bg-nano-gray-100 rounded transition-all"
+                                                    onClick={() => onViewRequest(group.references[0])}
+                                                    className="text-semester-blue hover:text-semester-blue-dark text-xs font-medium pt-2"
                                                 >
-                                                    {copiedId === `${req.requestId}-referee` ? '✓ Copied' : '🔗 Ref Link'}
+                                                    View Details →
                                                 </button>
-                                                <button
-                                                    onClick={() => copyToClipboard(getMockCandidateLink(req), req.requestId, 'candidate')}
-                                                    className="text-nano-gray-600 hover:text-semester-blue text-xs font-medium px-2 py-1 hover:bg-nano-gray-100 rounded transition-all"
-                                                >
-                                                    {copiedId === `${req.requestId}-candidate` ? '✓ Copied' : '📧 Consent'}
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -305,19 +330,6 @@ export const RequestList: React.FC<RequestListProps> = ({
                 <table className="min-w-full divide-y divide-nano-gray-200">
                     <thead className="bg-nano-gray-50">
                         <tr>
-                            {onSelectionChange && (
-                                <th className="px-4 py-3 text-left">
-                                    <input
-                                        type="checkbox"
-                                        checked={allSelected}
-                                        ref={(el) => {
-                                            if (el) el.indeterminate = someSelected && !allSelected;
-                                        }}
-                                        onChange={(e) => handleSelectAll(e.target.checked)}
-                                        className="w-4 h-4 text-semester-blue border-nano-gray-300 rounded focus:ring-semester-blue"
-                                    />
-                                </th>
-                            )}
                             <th className="px-6 py-3 text-left text-xs font-medium text-nano-gray-500 uppercase tracking-wider">
                                 Candidate → Referee
                             </th>
@@ -333,73 +345,114 @@ export const RequestList: React.FC<RequestListProps> = ({
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-nano-gray-200">
-                        {filteredRequests.map((req) => (
-                            <tr
-                                key={req.requestId}
-                                className={`hover:bg-nano-gray-50 transition-colors ${req.archived ? 'opacity-60 bg-nano-gray-50' : ''
-                                    } ${selectedIds.has(req.requestId) ? 'bg-semester-blue/5' : ''}`}
-                            >
-                                {onSelectionChange && (
-                                    <td className="px-4 py-4">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedIds.has(req.requestId)}
-                                            onChange={(e) => handleSelectRow(req.requestId, e.target.checked)}
-                                            className="w-4 h-4 text-semester-blue border-nano-gray-300 rounded focus:ring-semester-blue"
-                                        />
-                                    </td>
-                                )}
-                                <td className="px-6 py-4">
-                                    <div className={`text-sm font-medium ${req.archived ? 'text-nano-gray-500' : 'text-nano-gray-900'}`}>
-                                        {req.candidateName}
-                                    </div>
-                                    <div className="text-xs text-nano-gray-500">{req.candidateEmail}</div>
-                                    <div className="text-xs text-nano-gray-400 mt-1">→ {req.refereeName}</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    {getStatusBadge(req.status, req.archived)}
-                                    {req.anomalyFlag && !req.archived && (
-                                        <Badge variant="error" className="ml-2">⚠️ Flagged</Badge>
-                                    )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-nano-gray-500">
-                                    {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '-'}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right">
-                                    <div className="flex justify-end gap-2">
-                                        {onViewRequest && (
-                                            <button
-                                                onClick={() => onViewRequest(req)}
-                                                className="text-semester-blue hover:text-semester-blue-dark text-sm font-medium px-3 py-1.5 hover:bg-semester-blue/10 rounded transition-all"
-                                                title="View details"
+                        {candidateGroups.map((group) => {
+                            const isExpanded = expandedGroups.has(group.candidateEmail);
+                            const isMultiple = group.references.length > 1;
+
+                            return (
+                                <React.Fragment key={group.candidateEmail}>
+                                    {isMultiple ? (
+                                        <>
+                                            {/* Grouped header row */}
+                                            <tr
+                                                onClick={() => toggleGroup(group.candidateEmail)}
+                                                className="cursor-pointer hover:bg-nano-gray-100 transition-colors bg-nano-gray-50"
                                             >
-                                                View
-                                            </button>
-                                        )}
-                                        {!req.archived && (
-                                            <>
-                                                <button
-                                                    onClick={() => copyToClipboard(getMockRefereeLink(req), req.requestId, 'referee')}
-                                                    data-referee-url={getMockRefereeLink(req)}
-                                                    className="text-nano-gray-600 hover:text-semester-blue text-sm font-medium px-3 py-1.5 hover:bg-nano-gray-100 rounded transition-all"
-                                                    title="Copy referee portal link"
-                                                >
-                                                    {copiedId === `${req.requestId}-referee` ? '✓ Copied' : '🔗 Referee Link'}
-                                                </button>
-                                                <button
-                                                    onClick={() => copyToClipboard(getMockCandidateLink(req), req.requestId, 'candidate')}
-                                                    data-candidate-url={getMockCandidateLink(req)}
-                                                    className="text-nano-gray-600 hover:text-semester-blue text-sm font-medium px-3 py-1.5 hover:bg-nano-gray-100 rounded transition-all"
-                                                    title="Copy candidate consent link"
-                                                >
-                                                    {copiedId === `${req.requestId}-candidate` ? '✓ Copied' : '📧 Consent Link'}
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                                                <td colSpan={4} className="px-6 py-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex-1">
+                                                            <div className="font-semibold text-nano-gray-900 flex items-center gap-2">
+                                                                👤 {group.candidateName}
+                                                                <span className="text-xs font-normal text-nano-gray-500">
+                                                                    ({group.references.length} references)
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-xs text-nano-gray-500 mt-1">
+                                                                📧 {group.candidateEmail}
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                                {Object.entries(group.statusCounts).map(([status, count]) => (
+                                                                    <div key={status} className="inline-flex items-center gap-1">
+                                                                        {getStatusBadge(status as any, false)}
+                                                                        <span className="text-xs text-nano-gray-500">×{count}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-nano-gray-400 text-xl ml-4">
+                                                            {isExpanded ? '⌃' : ' ⌄'}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+
+                                            {/* Individual reference rows */}
+                                            {isExpanded && group.references.map(req => (
+                                                <tr key={req.requestId} className="bg-green-50/30 hover:bg-nano-gray-100">
+                                                    <td className="px-6 py-4 pl-12">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-nano-gray-400">→</span>
+                                                            <div>
+                                                                <div className="text-sm font-medium text-nano-gray-700">
+                                                                    {req.refereeName}
+                                                                </div>
+                                                                <div className="text-xs text-nano-gray-500">{req.refereeEmail}</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        {getStatusBadge(req.status, req.archived)}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-nano-gray-500">
+                                                        {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '-'}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                        {onViewRequest && (
+                                                            <button
+                                                                onClick={() => onViewRequest(req)}
+                                                                className="text-semester-blue hover:text-semester-blue-dark text-sm font-medium"
+                                                            >
+                                                                View →
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </>
+                                    ) : (
+                                        // Single reference - show as regular row
+                                        <tr className="hover:bg-nano-gray-50 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="text-sm font-medium text-nano-gray-900">
+                                                    {group.candidateName}
+                                                </div>
+                                                <div className="text-xs text-nano-gray-500">{group.candidateEmail}</div>
+                                                <div className="text-xs text-nano-gray-400 mt-1">→ {group.references[0].refereeName}</div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                {getStatusBadge(group.references[0].status, group.references[0].archived)}
+                                                {group.references[0].anomalyFlag && (
+                                                    <Badge variant="error" className="ml-2">⚠️ Flagged</Badge>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-nano-gray-500">
+                                                {group.references[0].createdAt ? new Date(group.references[0].createdAt).toLocaleDateString() : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                {onViewRequest && (
+                                                    <button
+                                                        onClick={() => onViewRequest(group.references[0])}
+                                                        className="text-semester-blue hover:text-semester-blue-dark text-sm font-medium"
+                                                    >
+                                                        View
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

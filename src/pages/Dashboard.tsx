@@ -424,8 +424,6 @@ const Dashboard: React.FC = () => {
                             onViewRequest={(req) => setSelectedRequest(req)}
                             statusFilter={statusFilter}
                             searchQuery={searchQuery}
-                            selectedIds={selectedIds}
-                            onSelectionChange={setSelectedIds}
                             showArchived={showArchived}
                         />
                     </Card>
