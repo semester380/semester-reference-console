@@ -63,10 +63,12 @@ export const RequestList: React.FC<RequestListProps> = ({
             switch (statusFilter) {
                 case 'pending':
                     return ['PENDING_CONSENT', 'Sent', 'Pending_Consent'].includes(req.status);
+                case 'awaiting':
+                    return ['Consent_Given', 'CONSENT_GIVEN'].includes(req.status);
                 case 'completed':
-                    return ['Completed', 'Consent_Given', 'CONSENT_GIVEN', 'SEALED'].includes(req.status);
-                case 'flagged':
-                    return req.anomalyFlag || req.status === 'EXPIRED' || req.status === 'Flagged';
+                    return ['Completed', 'SEALED'].includes(req.status);
+                case 'declined':
+                    return ['Declined', 'CONSENT_DECLINED'].includes(req.status);
                 default:
                     return true;
             }

@@ -18,9 +18,7 @@ const LIFECYCLE_STEPS = [
     { key: 'PENDING_CONSENT', label: 'Consent Pending', icon: '📧' },
     { key: 'Consent_Given', label: 'Consent Given', icon: '✅' },
     { key: 'Completed', label: 'Reference Submitted', icon: '✍️' },
-    { key: 'Declined', label: 'Reference Declined', icon: '🚫' },
-    { key: 'Analyzed', label: 'AI Analyzed', icon: '🤖' },
-    { key: 'Sealed', label: 'Sealed', icon: '🔒' }
+    { key: 'Declined', label: 'Declined', icon: '🚫' }
 ];
 
 export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
@@ -28,14 +26,12 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
     candidateName,
     refereeName,
     status,
-    onClose,
-    onSealed
+    onClose
 }) => {
     const { user } = useAuth();
     const [auditTrail, setAuditTrail] = useState<AuditEvent[]>([]);
     const [isLoadingAudit, setIsLoadingAudit] = useState(false);
     const [showAudit, setShowAudit] = useState(false);
-    const [isSealing, setIsSealing] = useState(false);
     const [requestData, setRequestData] = useState<Request | null>(null);
 
     useEffect(() => {
@@ -116,35 +112,6 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
             setAuditTrail([]); // Safe fallback
         } finally {
             setIsLoadingAudit(false);
-        }
-    };
-
-    const handleSeal = async () => {
-        if (!confirm('Are you sure you want to seal this reference? This action cannot be undone.')) {
-            return;
-        }
-        if (!requestData?.requestId || !user?.email) return;
-
-        setIsSealing(true);
-        try {
-            console.log('[Seal] Attempting to seal request:', requestId);
-            const result = await runGAS('sealRequest', { requestId, userEmail: user.email }) as { success: boolean; error?: string; pdfUrl?: string };
-            console.log('[Seal] Backend response:', result);
-
-            if (result.success) {
-                alert('Reference sealed successfully!');
-                if (onSealed) onSealed();
-                onClose();
-            } else {
-                const errorMsg = result.error || 'Unknown error occurred';
-                console.error('[Seal] Failed:', errorMsg);
-                alert('Failed to seal reference:\n\n' + errorMsg + '\n\nPlease check the console for details or contact support.');
-            }
-        } catch (e) {
-            console.error('[Seal] Exception:', e);
-            alert('An error occurred while sealing:\n\n' + (e instanceof Error ? e.message : String(e)) + '\n\nPlease check the console for details.');
-        } finally {
-            setIsSealing(false);
         }
     };
 
@@ -299,6 +266,49 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
                 </div>
 
                 <div className="p-8 space-y-8">
+                    {/* Status Banners */}
+                    {(currentStatus === 'Completed' || currentStatus === 'SEALED' || currentStatus === 'Sealed') && (
+                        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-lg">
+                            <div className="flex items-center gap-3">
+                                <span className="text-2xl">✅</span>
+                                <div className="flex-1">
+                                    <h3 className="font-semibold text-green-900">Reference Completed</h3>
+                                    <p className="text-sm text-green-700 mt-1">
+                                        This reference has been submitted by the referee and is ready to download for your records.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {(currentStatus === 'CONSENT_GIVEN' || currentStatus === 'Consent_Given') && (
+                        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg">
+                            <div className="flex items-center gap-3">
+                                <span className="text-2xl">⏳</span>
+                                <div className="flex-1">
+                                    <h3 className="font-semibold text-amber-900">Awaiting Referee Submission</h3>
+                                    <p className="text-sm text-amber-700 mt-1">
+                                        Candidate has given consent. The referee has been invited to complete this reference.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {currentStatus === 'PENDING_CONSENT' && (
+                        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
+                            <div className="flex items-center gap-3">
+                                <span className="text-2xl">📧</span>
+                                <div className="flex-1">
+                                    <h3 className="font-semibold text-blue-900">Pending Candidate Consent</h3>
+                                    <p className="text-sm text-blue-700 mt-1">
+                                        Waiting for the candidate to authorize this reference request.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Reference Summary */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="bg-nano-gray-50 p-5 rounded-xl border border-nano-gray-100">
@@ -557,12 +567,7 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
 
                     {/* Actions */}
                     <div className="flex gap-3 pt-6 border-t border-nano-gray-200">
-                        {currentStatus !== 'SEALED' && currentStatus !== 'Sealed' && (
-                            <Button onClick={handleSeal} disabled={isSealing} className="bg-semester-blue hover:bg-semester-blue-dark text-white shadow-lg shadow-semester-blue/20">
-                                {isSealing ? 'Sealing...' : '🔒 Seal Reference'}
-                            </Button>
-                        )}
-                        {(currentStatus === 'SEALED' || currentStatus === 'Sealed') && (
+                        {['Completed', 'SEALED', 'Sealed'].includes(currentStatus) && (
                             <Button
                                 onClick={handleDownloadPDF}
                                 disabled={isDownloading}

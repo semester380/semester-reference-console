@@ -17,7 +17,7 @@ const Dashboard: React.FC = () => {
     const [requests, setRequests] = useState<Request[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [stats, setStats] = useState<any>({ total: 0, pending: 0, completed: 0, flagged: 0, archived: 0 });
+    const [stats, setStats] = useState<any>({ total: 0, pending: 0, awaiting: 0, completed: 0, declined: 0, archived: 0 });
 
     // New filter and search state
     const [statusFilter, setStatusFilter] = useState('all');
@@ -73,8 +73,9 @@ const Dashboard: React.FC = () => {
         setStats({
             total: activeRequests.length,
             pending: activeRequests.filter(r => r.status === 'PENDING_CONSENT' || r.status === 'Sent' || r.status === 'Pending_Consent').length,
-            completed: activeRequests.filter(r => ['Completed', 'Consent_Given', 'CONSENT_GIVEN', 'SEALED', 'Declined'].includes(r.status)).length,
-            flagged: activeRequests.filter(r => r.anomalyFlag || r.status === 'EXPIRED' || r.status === 'Flagged').length,
+            awaiting: activeRequests.filter(r => r.status === 'Consent_Given' || r.status === 'CONSENT_GIVEN').length,
+            completed: activeRequests.filter(r => r.status === 'Completed' || r.status === 'SEALED').length,
+            declined: activeRequests.filter(r => r.status === 'Declined' || r.status === 'CONSENT_DECLINED').length,
             archived: data.filter(r => r.archived).length,
         });
     };
@@ -285,15 +286,20 @@ const Dashboard: React.FC = () => {
                         <div className="text-3xl font-semibold text-status-warning">{stats.pending}</div>
                         <div className="text-xs text-nano-gray-400 mt-1">Awaiting action</div>
                     </Card>
+                    <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setStatusFilter('awaiting'); setShowArchived(false); }}>
+                        <div className="text-sm text-nano-gray-600 mb-1">Awaiting Reference</div>
+                        <div className="text-3xl font-semibold text-status-warning">{stats.awaiting}</div>
+                        <div className="text-xs text-nano-gray-400 mt-1">Waiting for referee</div>
+                    </Card>
                     <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setStatusFilter('completed'); setShowArchived(false); }}>
                         <div className="text-sm text-nano-gray-600 mb-1">Completed</div>
                         <div className="text-3xl font-semibold text-status-success">{stats.completed}</div>
-                        <div className="text-xs text-nano-gray-400 mt-1">Ready to review</div>
+                        <div className="text-xs text-nano-gray-400 mt-1">PDF available</div>
                     </Card>
-                    <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setStatusFilter('flagged'); setShowArchived(false); }}>
-                        <div className="text-sm text-nano-gray-600 mb-1">Flagged/Expired</div>
-                        <div className="text-3xl font-semibold text-status-error">{stats.flagged}</div>
-                        <div className="text-xs text-nano-gray-400 mt-1">Needs attention</div>
+                    <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setStatusFilter('declined'); setShowArchived(false); }}>
+                        <div className="text-sm text-nano-gray-600 mb-1">Declined</div>
+                        <div className="text-3xl font-semibold text-status-error">{stats.declined}</div>
+                        <div className="text-xs text-nano-gray-400 mt-1">Declined by referee</div>
                     </Card>
                     <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setStatusFilter('archived'); setShowArchived(true); }}>
                         <div className="text-sm text-nano-gray-600 mb-1">Archived</div>
@@ -386,9 +392,10 @@ const Dashboard: React.FC = () => {
                                         className="px-4 py-2 border border-nano-gray-300 rounded-lg focus:ring-2 focus:ring-semester-blue focus:border-semester-blue transition-all text-sm bg-white"
                                     >
                                         <option value="all">All Active</option>
-                                        <option value="pending">Pending</option>
+                                        <option value="pending">Pending Consent</option>
+                                        <option value="awaiting">Awaiting Reference</option>
                                         <option value="completed">Completed</option>
-                                        <option value="flagged">Flagged/Expired</option>
+                                        <option value="declined">Declined</option>
                                         <option value="archived">Archived</option>
                                     </select>
 

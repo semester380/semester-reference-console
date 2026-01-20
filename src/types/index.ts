@@ -4,7 +4,7 @@ export interface Request {
     candidateEmail: string;
     refereeName: string;
     refereeEmail: string;
-    status: 'Pending_Consent' | 'Consent_Given' | 'Sent' | 'Viewed' | 'Completed' | 'Sealed' | 'Flagged' | 'EXPIRED' | 'CONSENT_DECLINED' | 'PENDING_CONSENT' | 'CONSENT_GIVEN';
+    status: 'PENDING_CONSENT' | 'Sent' | 'Pending_Consent' | 'Consent_Given' | 'CONSENT_GIVEN' | 'Completed' | 'SEALED' | 'Sealed' | 'Declined' | 'CONSENT_DECLINED' | 'Viewed' | 'Flagged' | 'EXPIRED';
     consentStatus: boolean | string;
     consentTimestamp?: string;
     sentimentScore?: string;

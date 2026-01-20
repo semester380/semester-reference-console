@@ -906,12 +906,14 @@ function initiateRequest(requestData, staff) {
       logAudit(requestId, 'Staff', staffId, staffName, 'REQUEST_INITIATED_STAFF_OVERRIDE', { 
         candidate: requestData.candidateEmail,
         referee: requestData.refereeEmail,
+        requester: requesterEmail,
         note: 'Staff bypassed candidate consent for urgent request'
       });
     } else {
       logAudit(requestId, 'Staff', staffId, staffName, 'REQUEST_INITIATED', { 
         candidate: requestData.candidateEmail,
-        referee: requestData.refereeEmail 
+        referee: requestData.refereeEmail,
+        requester: requesterEmail 
       });
     }
     
@@ -1676,6 +1678,9 @@ function getMyRequests(includeArchived = false, requesterEmail = null) {
   const aiResults = getAllAIResults();
   
   const myRequests = [];
+  let deniedCount = 0;
+  let grantedCount = 0;
+
   // Skip header
   for (let i = 1; i < data.length; i++) {
     // Check archived status
@@ -1705,22 +1710,28 @@ function getMyRequests(includeArchived = false, requesterEmail = null) {
              const myTeam = TEAM_GROUPS.find(team => team.some(member => member.toLowerCase() === userLower));
              if (myTeam && myTeam.some(member => member.toLowerCase() === creator)) {
                 isAllowed = true;
-                logDebug('getMyRequests', 'Access Granted via Team', { user: userLower, creator, team: myTeam });
+                // Only log first few team accesses to avoid spam
+                if (grantedCount < 5) {
+                   logDebug('getMyRequests', 'Access Granted via Team', { user: userLower, creator, team: myTeam });
+                }
              }
           }
           
           if (!isAllowed) {
-             logDebug('getMyRequests', 'Access Denied', { user: userLower, creator, requestId: getVal(data[i], 'RequestID') });
+             // logDebug('getMyRequests', 'Access Denied', { user: userLower, creator, requestId: getVal(data[i], 'RequestID') });
+             deniedCount++;
              continue; // Security Filter
           }
        } else {
-          logDebug('getMyRequests', 'SuperUser Access', { user: userLower, requestId: getVal(data[i], 'RequestID') });
+          // logDebug('getMyRequests', 'SuperUser Access', { user: userLower, requestId: getVal(data[i], 'RequestID') });
        }
     } else {
        // No user email available - deny all access (security fail-safe)
        logDebug('getMyRequests', 'No User Email - Denying All', { requesterEmail, sessionUser: Session.getActiveUser().getEmail() });
        continue;
     }
+    
+    grantedCount++;
     // --------------------------
     
     const requestId = getVal(data[i], 'RequestID');
@@ -1758,8 +1769,7 @@ function getMyRequests(includeArchived = false, requesterEmail = null) {
       refereeName: getVal(data[i], 'RefereeName'),
       refereeEmail: getVal(data[i], 'RefereeEmail'),
       status: status,
-      consentStatus: getVal(data[i], 'ConsentStatus') === 'GRANTED',
-      token: consentToken, // Legacy field
+      consentStatus: getVal(data[i], 'ConsentStatus') === 'GRANTED',\n      token: consentToken, // Legacy field
       consentToken: consentToken, // Robust alias
       refereeToken: refereeToken, 
       createdAt: getVal(data[i], 'CreatedAt'),
@@ -1771,6 +1781,7 @@ function getMyRequests(includeArchived = false, requesterEmail = null) {
     });
   }
   
+  logDebug('getMyRequests', 'Summary', { granted: grantedCount, denied: deniedCount, user: requesterEmail || userEmail });
   return { success: true, data: myRequests.reverse() };
 }
 
