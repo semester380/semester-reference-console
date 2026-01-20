@@ -3,8 +3,8 @@
  * Centralizes environment variables and provides fallbacks for production reliability
  */
 
-// Current Deployment: @268 - Fix PDF column name case
-export const WORKING_GAS_ID = 'AKfycbw13UoIGlwCYo6QVtuII1T6vhUtRihq9UI_ihGIgiMWzCBDMRyK1cDse1DBLe8OvsXU'; // @268 - PDF Download Fix (Column Name)
+// Current Deployment: @269 - Add manual PDF generation feature
+export const WORKING_GAS_ID = 'AKfycbzEjNrobvoZd6B1ZPrc37zjwegUNzvpCiGV9y8LW_ixcsGWuLjOBQGtn3Jv43sL0i8E'; // @269 - Generate PDF Button
 
 // Known broken IDs to ignore if they appear in environment variables
 const BROKEN_GAS_IDS = [
