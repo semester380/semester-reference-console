@@ -148,11 +148,12 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
                 window.URL.revokeObjectURL(url);
             } else {
                 console.error("Download failed:", result?.error);
-                alert("Failed to download PDF: " + (result?.error || "Unknown error"));
+                alert(`Failed to download PDF: ${result?.error || "Unknown error"}`);
             }
         } catch (e) {
             console.error("Download Error:", e);
-            alert("An error occurred while downloading.");
+            const errorMsg = e instanceof Error ? e.message : String(e);
+            alert(`An error occurred while downloading: ${errorMsg}`);
         } finally {
             setIsDownloading(false);
         }
