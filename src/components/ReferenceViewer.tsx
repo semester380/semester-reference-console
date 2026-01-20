@@ -33,6 +33,8 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
     const [isLoadingAudit, setIsLoadingAudit] = useState(false);
     const [showAudit, setShowAudit] = useState(false);
     const [requestData, setRequestData] = useState<Request | null>(null);
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
     useEffect(() => {
         if (user?.email) {
@@ -115,9 +117,6 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
         }
     };
 
-
-    const [isDownloading, setIsDownloading] = useState(false);
-
     const handleDownloadPDF = async () => {
         if (!requestData?.requestId || !user?.email) return;
 
@@ -156,6 +155,33 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
             alert(`An error occurred while downloading: ${errorMsg}`);
         } finally {
             setIsDownloading(false);
+        }
+    };
+
+    const handleGeneratePdf = async () => {
+        if (!requestData?.requestId || !user?.email) return;
+
+        try {
+            setIsGeneratingPdf(true);
+            const result = await runGAS('regeneratePdf', { requestId: requestData.requestId, userEmail: user.email });
+
+            if (result && result.success) {
+                alert('PDF generated successfully! You can now download it.');
+                // Reload the request data to show the new PDF
+                const refreshed = await runGAS('getRequest', { requestId: requestData.requestId });
+                if (refreshed && refreshed.success && refreshed.data) {
+                    setRequestData(refreshed.data);
+                }
+            } else {
+                console.error("PDF generation failed:", result?.error);
+                alert(`Failed to generate PDF: ${result?.error || "Unknown error"}`);
+            }
+        } catch (e) {
+            console.error("Generate PDF Error:", e);
+            const errorMsg = e instanceof Error ? e.message : String(e);
+            alert(`An error occurred while generating PDF: ${errorMsg}`);
+        } finally {
+            setIsGeneratingPdf(false);
         }
     };
 
@@ -569,25 +595,49 @@ export const ReferenceViewer: React.FC<ReferenceViewerProps> = ({
                     {/* Actions */}
                     <div className="flex gap-3 pt-6 border-t border-nano-gray-200">
                         {['Completed', 'SEALED', 'Sealed'].includes(currentStatus) && (
-                            <Button
-                                onClick={handleDownloadPDF}
-                                disabled={isDownloading}
-                                className="bg-semester-blue hover:bg-semester-blue-dark text-white shadow-lg shadow-semester-blue/20 min-w-[150px]"
-                            >
-                                {isDownloading ? (
-                                    <>
-                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        Downloading...
-                                    </>
+                            <>
+                                {requestData?.pdfUrl || requestData?.pdfFileId ? (
+                                    <Button
+                                        onClick={handleDownloadPDF}
+                                        disabled={isDownloading}
+                                        className="bg-semester-blue hover:bg-semester-blue-dark text-white shadow-lg shadow-semester-blue/20 min-w-[150px]"
+                                    >
+                                        {isDownloading ? (
+                                            <>
+                                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Downloading...
+                                            </>
+                                        ) : (
+                                            <>
+                                                📥 Download PDF
+                                            </>
+                                        )}
+                                    </Button>
                                 ) : (
-                                    <>
-                                        📥 Download PDF
-                                    </>
+                                    <Button
+                                        onClick={handleGeneratePdf}
+                                        disabled={isGeneratingPdf}
+                                        className="bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/20 min-w-[150px]"
+                                    >
+                                        {isGeneratingPdf ? (
+                                            <>
+                                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Generating...
+                                            </>
+                                        ) : (
+                                            <>
+                                                🔧 Generate PDF
+                                            </>
+                                        )}
+                                    </Button>
                                 )}
-                            </Button>
+                            </>
                         )}
                         <Button variant="secondary" onClick={() => setShowAudit(!showAudit)}>
                             {showAudit ? 'Hide' : 'View'} Full Audit Log

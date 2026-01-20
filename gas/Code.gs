@@ -292,7 +292,7 @@ function handleApiRequest(e) {
     ];
     
     const staffEndpoints = [
-      'initiateRequest', 'getMyRequests', 'getRequest', 'getAuditTrail', 'downloadPdfPayload'
+      'initiateRequest', 'getMyRequests', 'getRequest', 'getAuditTrail', 'downloadPdfPayload', 'regeneratePdf'
     ];
 
     const isPublic = publicEndpoints.includes(action);
@@ -501,6 +501,9 @@ function handleApiRequest(e) {
         break;
       case 'sealRequest':
         result = sealRequest(payload.requestId, staff);
+        break;
+      case 'regeneratePdf':
+        result = regeneratePdfForRequest(payload.requestId);
         break;
       
       // Staff Management (Admin Only)
@@ -2134,6 +2137,86 @@ function downloadPdfPayload(requestId) {
     return { success: false, error: e.toString() };
   }
 }
+
+/**
+ * Manually regenerate PDF for a completed reference
+ */
+function regeneratePdfForRequest(requestId) {
+  try {
+    // Get the request data directly from sheet
+    const ss = getDatabaseSpreadsheet();
+    const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
+    if (!requestsSheet) {
+      return { success: false, error: "Database not found" };
+    }
+    
+    const data = requestsSheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // Find column indices
+    const colMap = {};
+    headers.forEach((h, i) => colMap[h] = i);
+    const getVal = (row, name) => row[colMap[name]];
+    
+    // Find the request row
+    const requestIdCol = colMap['RequestID'];
+    if (requestIdCol === undefined) {
+      return { success: false, error: "Invalid sheet structure" };
+    }
+    
+    const rowIndex = data.slice(1).findIndex(r => r[requestIdCol] === requestId);
+    if (rowIndex === -1) {
+      return { success: false, error: `Request not found: ${requestId}` };
+    }
+    
+    const row = data[rowIndex + 1]; // +1 because slice removed header
+    const actualRowIndex = rowIndex + 2; // +2 for sheet (1-indexed + header)
+    
+    // Check if reference is completed
+    const status = getVal(row, 'Status');
+    if (status !== 'Completed' && status !== 'SEALED') {
+      return { success: false, error: "Can only generate PDF for completed references" };
+    }
+    
+    // Get full request data
+    const fullRequest = getRequest(requestId, 'rob@semester.co.uk').data; // Use admin bypass
+    if (!fullRequest) {
+      return { success: false, error: "Could not load request data" };
+    }
+    
+    // Generate PDF
+    if (typeof generateReferencePdf === 'function') {
+      const pdfResult = generateReferencePdf(requestId, fullRequest);
+      if (pdfResult.success) {
+        // Update the sheet with PDF info
+        const pdfFileIdCol = colMap['PdfFileId'];
+        const pdfUrlCol = colMap['PdfUrl'];
+        
+        if (pdfFileIdCol !== undefined) {
+          requestsSheet.getRange(actualRowIndex, pdfFileIdCol + 1).setValue(pdfResult.pdfFileId);
+        }
+        if (pdfUrlCol !== undefined) {
+          requestsSheet.getRange(actualRowIndex, pdfUrlCol + 1).setValue(pdfResult.pdfUrl);
+        }
+        
+        return { 
+          success: true, 
+          message: "PDF generated successfully",
+          pdfUrl: pdfResult.pdfUrl 
+        };
+      } else {
+        return { success: false, error: pdfResult.error || "PDF generation failed" };
+      }
+    } else {
+      return { success: false, error: "PDF generation function not available" };
+    }
+    
+  } catch (e) {
+    console.error("regeneratePdfForRequest Error: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
 
 // --- PDF & Sealing ---
 
