@@ -1769,7 +1769,8 @@ function getMyRequests(includeArchived = false, requesterEmail = null) {
       refereeName: getVal(data[i], 'RefereeName'),
       refereeEmail: getVal(data[i], 'RefereeEmail'),
       status: status,
-      consentStatus: getVal(data[i], 'ConsentStatus') === 'GRANTED',\n      token: consentToken, // Legacy field
+      consentStatus: getVal(data[i], 'ConsentStatus') === 'GRANTED',
+      token: consentToken, // Legacy field
       consentToken: consentToken, // Robust alias
       refereeToken: refereeToken, 
       createdAt: getVal(data[i], 'CreatedAt'),
@@ -2055,28 +2056,49 @@ function deleteTemplate(templateId) {
  */
 function downloadPdfPayload(requestId) {
   try {
-    const requestResult = getRequest(requestId);
-    if (!requestResult.success || !requestResult.data) {
-       return { success: false, error: "Request not found" };
+    // Direct sheet access - staff can download any completed reference PDF
+    const ss = getDatabaseSpreadsheet();
+    const requestsSheet = ss.getSheetByName(SHEET_REQUESTS);
+    if (!requestsSheet) {
+      return { success: false, error: "Database not found" };
     }
-    const request = requestResult.data;
+    
+    const data = requestsSheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // Find column indices
+    const colMap = {};
+    headers.forEach((h, i) => colMap[h] = i);
+    const getVal = (row, name) => row[colMap[name]];
+    
+    // Find the request row
+    const requestIdCol = colMap['RequestID'];
+    if (requestIdCol === undefined) {
+      return { success: false, error: "Invalid sheet structure" };
+    }
+    
+    const row = data.slice(1).find(r => r[requestIdCol] === requestId);
+    if (!row) {
+      return { success: false, error: `Request not found: ${requestId}` };
+    }
     
     // Check if PDF exists (File ID or URL)
-    let fileId = request.pdfFileId;
+    let fileId = getVal(row, 'PDFFileID');
     
     // Fallback: Extract from URL if ID is missing but URL exists
-    if (!fileId && request.pdfUrl) {
+    if (!fileId && getVal(row, 'PdfUrl')) {
        try {
-         const match = request.pdfUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+         const pdfUrl = getVal(row, 'PdfUrl');
+         const match = pdfUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
          if (match && match[1]) {
             fileId = match[1];
          } else {
             // Try ID parameter style
-            const matchId = request.pdfUrl.match(/id=([a-zA-Z0-9_-]+)/);
+            const matchId = pdfUrl.match(/id=([a-zA-Z0-9_-]+)/);
             if (matchId && matchId[1]) fileId = matchId[1];
          }
        } catch (e) {
-         console.warn("Failed to extract ID from URL:", request.pdfUrl);
+         console.warn("Failed to extract ID from URL");
        }
     }
 
@@ -2096,7 +2118,9 @@ function downloadPdfPayload(requestId) {
     
     // Config Sanitized Filename
     const sanitize = (str) => (str || 'Unknown').replace(/[^a-z0-9]/gi, '_').trim();
-    const fileName = `Reference - ${sanitize(request.candidateName)} - ${sanitize(request.refereeName)}.pdf`;
+    const candidateName = getVal(row, 'CandidateName');
+    const refereeName = getVal(row, 'RefereeName');
+    const fileName = `Reference - ${sanitize(candidateName)} - ${sanitize(refereeName)}.pdf`;
    
     return {
        success: true,
