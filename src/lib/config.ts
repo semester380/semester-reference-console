@@ -3,8 +3,8 @@
  * Centralizes environment variables and provides fallbacks for production reliability
  */
 
-// Current Deployment: @263 - Security fix - staff access control CRITICAL
-export const WORKING_GAS_ID = 'AKfycbxwHwMvjwLsgfeBJpXlQy2VBB5n19F4MdTS04ZJsaWrF-wMai65tEHyXaq_T_lWwowW'; // @263 - Security Fix
+// Current Deployment: @266 - Fix PDF download - bypass access control for staff
+export const WORKING_GAS_ID = 'AKfycbxXSanviYvTJaeWkyttKq9d7T12237lEx5knQ8arZ9ZYEcds8H7pnRciPlbvI10cgu9'; // @266 - PDF Download Fix
 
 // Known broken IDs to ignore if they appear in environment variables
 const BROKEN_GAS_IDS = [
